@@ -105,6 +105,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.4"
+  firebase_auth:
+    dependency: "direct main"
+    description:
+      name: firebase_auth
+      sha256: "10ddd766bd3d3baf1cc8fed544ef83a2c0e6027514a020e56114212ffe1036f2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.6.0"
+  firebase_auth_platform_interface:
+    dependency: transitive
+    description:
+      name: firebase_auth_platform_interface
+      sha256: fde52352bfd553f5e38239b868e1e6fe6c1a6af542f5cc547554c61fef30b99b
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.7.0"
+  firebase_auth_web:
+    dependency: transitive
+    description:
+      name: firebase_auth_web
+      sha256: "33a0e6521a1c8c476949cc4f2f7b7d9ed8f99514b08dd905fdb9546d2391e5d9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.15.0"
   firebase_core:
     dependency: "direct main"
     description:
@@ -147,14 +171,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_tts:
-    dependency: "direct main"
-    description:
-      name: flutter_tts
-      sha256: bdf2fc4483e74450dc9fc6fe6a9b6a5663e108d4d0dad3324a22c8e26bf48af4
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.2.3"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -176,14 +192,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.0"
-  intl:
+  http_parser:
     dependency: transitive
     description:
-      name: intl
-      sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
+      name: http_parser
+      sha256: "178d74305e7866013777bab2c3d8726205dc5a4dd935297175b19a23a2e66571"
       url: "https://pub.dev"
     source: hosted
-    version: "0.20.2"
+    version: "4.1.2"
   leak_tracker:
     dependency: transitive
     description:
@@ -312,14 +328,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
-  simple_gesture_detector:
-    dependency: transitive
-    description:
-      name: simple_gesture_detector
-      sha256: ba2cd5af24ff20a0b8d609cec3f40e5b0744d2a71804a2616ae086b9c19d19a3
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.1"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -357,14 +365,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
-  table_calendar:
-    dependency: "direct main"
-    description:
-      name: table_calendar
-      sha256: "0c0c6219878b363a2d5f40c7afb159d845f253d061dc3c822aa0d5fe0f721982"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.2.0"
   term_glyph:
     dependency: transitive
     description:

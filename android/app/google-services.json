@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "171763188147",
+    "project_id": "sominword",
+    "storage_bucket": "sominword.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:171763188147:android:4b163b4c7b8d986f300bc6",
+        "android_client_info": {
+          "package_name": "com.example.sominword"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADymiSapRZRUUtgTPdbSLN6OsofuvuLzs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:171763188147:android:b0b80f744d8bd95e300bc6",
+        "android_client_info": {
+          "package_name": "com.somin.sominword"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADymiSapRZRUUtgTPdbSLN6OsofuvuLzs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
