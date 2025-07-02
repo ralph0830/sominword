@@ -171,3 +171,27 @@ TTS 발음 기능 구현: flutter_tts 연동 및 스피커 아이콘 동작.
 예문 추가 및 예문 발음 기능.
 
 사진 또는 이미지 자료 연동.
+
+8. 진행 현황 및 이슈 (Progress & Issues)
+
+- 2025년 7월 기준, 아래와 같이 개발이 진행됨
+
+### [완료된 주요 작업]
+- Flutter 3.32.5 및 Dart 3.8.1 환경에서 개발 환경 구축 (WSL2 + Ubuntu 22.04)
+- WSL2 환경에서 Windows Chrome 및 Linux Chrome 연동 설정, Flutter Web 정상 실행
+- Firebase 연동 및 Firestore 데이터 모델 설계/구현
+- 관리자 페이지(Flutter Web) 개발 및 서버 실행, 단어 CRUD, UI/UX 구현
+- 사용자 앱 주요 기능(카드 뷰, 스와이프, TTS, 즐겨찾기, 학습 모드, 캘린더, 오늘의 단어 등) 구현 완료
+- git을 통한 형상 관리 및 원격 저장소(GitHub) 동기화
+
+### [남은 과제 및 향후 계획]
+- 주요 기능별 단위/통합 테스트 작성 및 실제 기기/에뮬레이터 테스트
+- 앱 아이콘/스플래시 이미지 제작, QA 및 버그 수정, 최종 배포 준비
+- Google Play Store/Apple App Store 등록
+- 사용자별 학습 진도 저장, 단어 게임, 예문/이미지 자료 등 확장 기능 검토
+
+### [환경 특이사항 및 참고]
+- 개발 환경: WSL2(Ubuntu 22.04) + Flutter Web + Chrome(Linux/Windows)
+- git 커밋/푸시 및 원격 저장소 관리 완료
+- systemd 서비스 파일로 관리자 페이지 서버 자동 실행 가능
+- ADB, 포트, 방화벽 등 환경 이슈 해결 경험 있음

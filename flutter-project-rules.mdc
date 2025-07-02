@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+### [Flutter] 비동기 이후 BuildContext 사용 규칙
+
+- await 등 비동기 작업 이후 BuildContext를 사용할 때는 반드시 다음 중 하나를 지켜야 한다.
+  1. StatefulWidget의 context 사용 시: if (!mounted) return; 또는 if (context.mounted) 체크 후 사용
+  2. showDialog 등 builder의 context 사용 시: builder의 ctx를 직접 사용 (Navigator.of(ctx), ScaffoldMessenger.of(ctx) 등)
+  3. showDialog builder 내부에서는 if (!mounted) return; 체크를 사용하지 않음 (이는 "unrelated mounted check" 오류 발생)
+- context를 변수로 저장해서 나중에 사용하는 패턴은 금지
+- showDialog builder 내부에서는 ctx.mounted 체크 대신 바로 ctx 사용
+- showDialog builder 내부에서 비동기 후 ctx 사용 시 경고가 발생하면 // ignore: use_build_context_synchronously 주석 추가
+- **StatefulWidget 내부 메서드에서 context 사용 시**: `mounted` 체크 사용 (context.mounted 아님)
+- **showDialog builder 내부에서 context 사용 시**: `context.mounted` 체크 사용
+- 공식문서: https://dart.dev/tools/diagnostics/use_build_context_synchronously
+
+### [Flutter] print 함수 사용 금지 규칙
+
+- 프로덕션 코드에서는 `print` 함수 사용을 금지한다.
+- 디버그 출력이 필요한 경우 다음 중 하나를 사용한다:
+  1. Flutter 앱의 경우: `debugPrint` 함수를 `kDebugMode`로 감싸서 사용
+  2. Flutter가 아닌 Dart 코드의 경우: 로깅 프레임워크 사용 (예: package:logging)
+- 올바른 사용 예시:
+  ```dart
+  import 'package:flutter/foundation.dart';
+  
+  if (kDebugMode) {
+    debugPrint('디버그 메시지');
+  }
+  ```
+- 잘못된 사용 예시:
+  ```dart
+  print('디버그 메시지'); // avoid_print 경고 발생
+  ```
+- 공식문서: https://dart.dev/tools/diagnostics/avoid_print
+ 

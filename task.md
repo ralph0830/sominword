@@ -80,12 +80,37 @@
 - [ ] 버그 수정 및 QA 피드백 반영
 
 ## 14. 배포 준비 및 앱스토어 등록
-- [ ] 앱 아이콘/스플래시 이미지 제작 및 적용
+- [x] 앱 아이콘/스플래시 이미지 제작 및 적용
+- [x] 타이틀 화면 이미지 개선 및 로딩 화면 타이틀 이미지로 대체
 - [ ] Android/iOS/Web 빌드 및 배포 준비
 - [ ] Google Play Store/Apple App Store 등록 절차 진행
 - [ ] 최종 QA 및 릴리즈 노트 작성
 
-## 15. 향후 고려사항(선택/확장)
+## 15. 관리자 권한 체계 구현
+- [x] 슈퍼 관리자와 일반 관리자 권한 분리 설계
+- [x] Firebase 보안 규칙에 관리자 권한 체계 추가
+- [x] 사용자 앱에 기기 고유번호 표시 및 복사 기능 추가
+- [x] 관리자 페이지에 Firebase Auth 인증 시스템 추가
+- [x] 관리자 신청 및 승인 시스템 구현
+- [x] 슈퍼 관리자 전용 관리자 승인 관리 페이지 구현
+- [x] Firebase 보안 규칙 배포 완료
+- [x] deprecated_member_use 오류 수정 (withOpacity → withValues)
+- [x] flutter-project-rules.mdc 파일에 deprecated 오류 처리 규칙 추가
+- [x] unchecked_use_of_nullable_value 오류 수정 (타입 캐스팅 적용)
+- [x] invalid_null_aware_operator 오류 수정 (불필요한 null-aware 연산자 제거)
+- [x] unused_local_variable 오류 수정 (사용하지 않는 createdAt 변수 제거)
+- [x] use_build_context_synchronously 오류 수정 (context.mounted 체크 적용)
+- [x] 관리자 페이지 setState after dispose 오류 수정 (mounted 체크 적용)
+- [x] 승인되지 않은 관리자 로그인 시 경고 메시지 개선
+- [x] use_build_context_synchronously 경고 수정 (context.mounted 체크 적용)
+- [x] undefined_identifier 'mounted' 오류 수정 (builder 내부에서 context.mounted 사용)
+- [x] use_build_context_synchronously 경고 및 setState after dispose 오류 수정 (mounted 체크 적용)
+- [x] avoid_print 경고 수정 (debugPrint와 kDebugMode 사용)
+- [x] flutter-project-rules.mdc에 print 함수 사용 금지 규칙 추가
+- [x] use_build_context_synchronously 경고 추가 수정 (showDialog builder 내부에서 ctx.mounted 사용)
+- [x] flutter-project-rules.mdc에 BuildContext 사용 규칙 세분화 추가
+
+## 16. 향후 고려사항(선택/확장)
 - [ ] 사용자별 학습 진도 저장 (Firebase Auth 연동)
 - [ ] 단어 게임(스펠링 퀴즈, 짝 맞추기 등) 추가
 - [ ] 예문/이미지 자료 연동 및 예문 발음 기능 

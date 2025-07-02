@@ -4,7 +4,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 import 'firebase_options.dart';
+import 'services/device_id_service.dart';
+import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +18,13 @@ void main() async {
   await Hive.openBox('favorites');
   // Firestore 오프라인 캐싱(퍼시스턴스) 활성화 (공식 가이드)
   FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  
+  // 기기 ID 초기화 및 기기 정보 저장
+  final deviceIdService = DeviceIdService();
+  final firebaseService = FirebaseService();
+  await deviceIdService.getDeviceId(); // 기기 ID 생성/확인
+  await firebaseService.saveDeviceInfo(); // 기기 정보를 Firebase에 저장
+  
   runApp(const MyApp());
 }
 
@@ -58,6 +68,9 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   final FlutterTts flutterTts = FlutterTts();
+  String? deviceId;
+  bool showDeviceId = false;
+  bool isDeviceRegistered = false;
 
   @override
   void initState() {
@@ -65,27 +78,273 @@ class _SplashScreenState extends State<SplashScreen> {
     // TTS 옵션 미리 초기화
     flutterTts.setLanguage('en-US');
     flutterTts.setPitch(1.0);
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomePage()),
-      );
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // 기기 ID 가져오기
+    final deviceIdService = DeviceIdService();
+    final firebaseService = FirebaseService();
+    final id = await deviceIdService.getDeviceId();
+    
+    // 기기가 등록되어 있는지 확인
+    final isRegistered = await firebaseService.isDeviceRegistered();
+    
+    setState(() {
+      deviceId = id;
+      isDeviceRegistered = isRegistered;
     });
+
+    // 3초 후 처리
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+    
+    if (isRegistered) {
+      // 기기가 등록되어 있으면 바로 앱으로 이동
+      _proceedToApp();
+    } else {
+      // 기기가 등록되어 있지 않으면 기기 ID 화면 표시
+      setState(() {
+        showDeviceId = true;
+      });
+    }
+  }
+
+  void _copyDeviceId() {
+    if (deviceId != null) {
+      Clipboard.setData(ClipboardData(text: deviceId!));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('기기 고유번호가 클립보드에 복사되었습니다.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _proceedToApp() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const HomePage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FlutterLogo(size: 80),
-            SizedBox(height: 24),
-            Text('SominWord', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-            SizedBox(height: 12),
-            CircularProgressIndicator(),
-          ],
+    if (!showDeviceId) {
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.blue, Colors.purple],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.asset(
+                      'assets/images/app_icon.png',
+                      fit: BoxFit.contain,
+                      width: 120,
+                      height: 120,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                const Text(
+                  'SominWord',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(0, 2),
+                        blurRadius: 4,
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '영어 단어 학습 앱',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(0, 1),
+                        blurRadius: 2,
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 40),
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.blue, Colors.purple],
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/images/app_icon.png',
+                      fit: BoxFit.contain,
+                      width: 100,
+                      height: 100,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  '기기 고유번호',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(0, 2),
+                        blurRadius: 4,
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '관리자 페이지 접속 시 이 번호가 필요합니다.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(0, 1),
+                        blurRadius: 2,
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.blue, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.blue.withValues(alpha: 0.1),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        deviceId ?? '로딩 중...',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'monospace',
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _copyDeviceId,
+                            icon: const Icon(Icons.copy),
+                            label: const Text('복사'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: _proceedToApp,
+                            icon: const Icon(Icons.arrow_forward),
+                            label: const Text('앱 시작'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  '💡 관리자 페이지에서 이 번호를 입력하여\n단어를 추가/수정할 수 있습니다.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white60,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(0, 1),
+                        blurRadius: 2,
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -115,6 +374,10 @@ class _HomePageState extends State<HomePage> {
   bool showTodayWords = false;
   bool isOffline = false;
   bool isSpeaking = false;
+  
+  // 앱 제목 클릭 관련 변수
+  int titleClickCount = 0;
+  String? deviceId;
 
   @override
   void initState() {
@@ -123,7 +386,91 @@ class _HomePageState extends State<HomePage> {
     // TTS 옵션 미리 초기화
     flutterTts.setLanguage('en-US');
     flutterTts.setPitch(1.0);
+    _loadDeviceId();
     _fetchWords();
+  }
+
+  Future<void> _loadDeviceId() async {
+    final deviceIdService = DeviceIdService();
+    final id = await deviceIdService.getDeviceId();
+    setState(() {
+      deviceId = id;
+    });
+  }
+
+  void _onTitleTap() {
+    setState(() {
+      titleClickCount++;
+    });
+    
+    if (titleClickCount >= 5) {
+      _showDeviceIdDialog();
+      titleClickCount = 0; // 리셋
+    }
+    
+    // 3초 후 클릭 카운트 리셋
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && titleClickCount > 0) {
+        setState(() {
+          titleClickCount = 0;
+        });
+      }
+    });
+  }
+
+  void _showDeviceIdDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('기기 고유번호'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('관리자 페이지 접속 시 이 번호가 필요합니다.'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.blue, width: 1),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.blue.withValues(alpha: 0.1),
+              ),
+              child: Text(
+                deviceId ?? '로딩 중...',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('닫기'),
+          ),
+                      ElevatedButton.icon(
+              onPressed: () {
+                if (deviceId != null) {
+                  Clipboard.setData(ClipboardData(text: deviceId!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('기기 고유번호가 클립보드에 복사되었습니다.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+                Navigator.pop(ctx);
+              },
+              icon: const Icon(Icons.copy),
+              label: const Text('복사'),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _fetchWords() async {
@@ -132,43 +479,87 @@ class _HomePageState extends State<HomePage> {
       errorMsg = null;
       isOffline = false;
     });
+    
+    final firebaseService = FirebaseService();
+    
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('words')
-          .orderBy('input_timestamp', descending: true)
-          .get(const GetOptions(source: Source.serverAndCache));
+      debugPrint('🔍 [DEBUG] 단어 조회 시작...');
+      
+      // 기기별 단어 조회
+      final snapshot = await firebaseService.getWordsStream().first;
+      debugPrint('🔍 [DEBUG] Firestore에서 ${snapshot.docs.length}개 문서 조회됨');
+      
       words = snapshot.docs.map((doc) {
-        final data = doc.data();
+        final data = doc.data() as Map<String, dynamic>;
+        debugPrint('🔍 [DEBUG] 문서 ID: ${doc.id}');
+        debugPrint('🔍 [DEBUG] 문서 데이터: $data');
+        debugPrint('🔍 [DEBUG] 문서 키들: ${data.keys.toList()}');
+        
+        final word = data['englishWord'] ?? data['english_word'] ?? '';
+        final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
+        final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
+        final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
+        final isFavorite = data['isFavorite'] ?? data['is_favorite'] ?? false;
+        
+        debugPrint('🔍 [DEBUG] 파싱 결과 - 영어: "$word", 품사: "$partOfSpeech", 뜻: "$meaning"');
+        
         return {
-          'word': data['english_word'] ?? '',
-          'partOfSpeech': data['korean_part_of_speech'] ?? '',
-          'meaning': data['korean_meaning'] ?? '',
-          'input_timestamp': data['input_timestamp'],
+          'id': doc.id,
+          'word': word,
+          'partOfSpeech': partOfSpeech,
+          'meaning': meaning,
+          'input_timestamp': timestamp,
+          'isFavorite': isFavorite,
         };
       }).toList();
+      
+      debugPrint('🔍 [DEBUG] 최종 단어 목록: ${words.length}개');
+      if (words.isNotEmpty) {
+        debugPrint('🔍 [DEBUG] 첫 번째 단어: ${words.first}');
+      }
+      
       _filterTodayWords();
       currentIndex = 0;
     } catch (e) {
+      debugPrint('🔍 [DEBUG] 단어 조회 실패: $e');
+      
       // 네트워크 예외 발생 시 캐시 데이터 시도
       try {
-        final snapshot = await FirebaseFirestore.instance
-            .collection('words')
-            .orderBy('input_timestamp', descending: true)
-            .get(const GetOptions(source: Source.cache));
+        debugPrint('🔍 [DEBUG] 캐시 데이터 시도 중...');
+        final snapshot = await firebaseService.getWordsStream().first;
+        debugPrint('🔍 [DEBUG] 캐시에서 ${snapshot.docs.length}개 문서 조회됨');
+        
         words = snapshot.docs.map((doc) {
-          final data = doc.data();
+          final data = doc.data() as Map<String, dynamic>;
+          debugPrint('🔍 [DEBUG] 캐시 문서 ID: ${doc.id}');
+          debugPrint('🔍 [DEBUG] 캐시 문서 데이터: $data');
+          
+          final word = data['englishWord'] ?? data['english_word'] ?? '';
+          final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
+          final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
+          final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
+          final isFavorite = data['isFavorite'] ?? data['is_favorite'] ?? false;
+          
+          debugPrint('🔍 [DEBUG] 캐시 파싱 결과 - 영어: "$word", 품사: "$partOfSpeech", 뜻: "$meaning"');
+          
           return {
-            'word': data['english_word'] ?? '',
-            'partOfSpeech': data['korean_part_of_speech'] ?? '',
-            'meaning': data['korean_meaning'] ?? '',
-            'input_timestamp': data['input_timestamp'],
+            'id': doc.id,
+            'word': word,
+            'partOfSpeech': partOfSpeech,
+            'meaning': meaning,
+            'input_timestamp': timestamp,
+            'isFavorite': isFavorite,
           };
         }).toList();
+        
+        debugPrint('🔍 [DEBUG] 캐시 최종 단어 목록: ${words.length}개');
+        
         _filterTodayWords();
         currentIndex = 0;
         isOffline = true;
         errorMsg = '네트워크 연결이 불안정하여 오프라인 캐시 데이터로 표시합니다.';
       } catch (e2) {
+        debugPrint('🔍 [DEBUG] 캐시 데이터도 실패: $e2');
         errorMsg = '단어 불러오기 실패(네트워크/캐시 모두 불가): $e';
       }
     }
@@ -223,7 +614,7 @@ class _HomePageState extends State<HomePage> {
 
   void _showFavoritesDialog() {
     final favoriteWords = words
-        .where((w) => isFavoriteWord(w['word'] as String))
+        .where((w) => isFavoriteWord(w['word'] as String? ?? ''))
         .toList();
     showDialog(
       context: context,
@@ -427,7 +818,10 @@ class _HomePageState extends State<HomePage> {
     if (errorMsg != null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('SominWord'),
+          title: GestureDetector(
+            onTap: _onTitleTap,
+            child: const Text('SominWord'),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.today),
@@ -443,7 +837,10 @@ class _HomePageState extends State<HomePage> {
     if (list.isEmpty) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('SominWord'),
+          title: GestureDetector(
+            onTap: _onTitleTap,
+            child: const Text('SominWord'),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.today),
@@ -457,13 +854,16 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     }
-    final word = list[currentIndex]['word'] as String;
-    final partOfSpeech = list[currentIndex]['partOfSpeech'] as String;
-    final meaning = list[currentIndex]['meaning'] as String;
+    final word = list[currentIndex]['word'] as String? ?? '';
+    final partOfSpeech = list[currentIndex]['partOfSpeech'] as String? ?? '';
+    final meaning = list[currentIndex]['meaning'] as String? ?? '';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SominWord'),
+        title: GestureDetector(
+          onTap: _onTitleTap,
+          child: const Text('SominWord'),
+        ),
         actions: [
           DropdownButton<StudyMode>(
             value: mode,
