@@ -114,3 +114,30 @@
 - [ ] 사용자별 학습 진도 저장 (Firebase Auth 연동)
 - [ ] 단어 게임(스펠링 퀴즈, 짝 맞추기 등) 추가
 - [ ] 예문/이미지 자료 연동 및 예문 발음 기능 
+
+
+
+변경 설계 요약
+1. Firestore 구조
+account (컬렉션)
+{email} (문서, 예: ralph0830@gmail.com)
+isSuperAdmin: true/false
+isApproved: true/false
+deviceId, deviceName, requestedAt, approvedAt, approvedBy 등
+2. 코드 변경 포인트
+모든 admins → account로 컬렉션명 변경
+문서 ID는 uid → email로 변경(이메일이 고유키)
+슈퍼관리자 여부: isSuperAdmin 필드로 판별
+승인 여부: isApproved 필드로 판별
+관리자 승인/거부, 리스트, 권한 체크 등 모든 로직에서 컬렉션/필드명 일괄 변경
+진행 순서
+로그인/권한 체크 로직:
+admins → account
+uid → email
+isSuperAdmin 필드로 슈퍼관리자 판별
+관리자 승인/거부/목록:
+컬렉션/필드명 일괄 변경
+신규 관리자 신청/등록:
+account 컬렉션에 문서 생성
+UI/UX:
+슈퍼관리자만 승인/권한 부여 가능하도록 UI 유지

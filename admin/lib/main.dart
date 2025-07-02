@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,16 +46,10 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.hasData) {
           final user = snapshot.data!;
           
-          // 슈퍼 관리자는 바로 접근
-          if (user.email == 'ralph0830@gmail.com') {
-            return DeviceListPage();
-          }
-          
-          // 일반 관리자는 승인 상태 확인
           return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance
-                .collection('admins')
-                .doc(user.uid)
+                .collection('account')
+                .doc(user.email)
                 .get(),
             builder: (context, adminSnapshot) {
               if (adminSnapshot.connectionState == ConnectionState.waiting) {
@@ -63,14 +59,14 @@ class AuthWrapper extends StatelessWidget {
               }
               
               final adminData = adminSnapshot.data?.data() as Map<String, dynamic>?;
+              final isSuperAdmin = adminData?['isSuperAdmin'] == true;
               final isApproved = adminData?['isApproved'] ?? false;
               
               if (isApproved) {
-                return DeviceListPage();
+                return DeviceListPage(isSuperAdmin: isSuperAdmin);
               } else {
-                // 승인되지 않은 관리자는 로그아웃 후 로그인 페이지로
                 FirebaseAuth.instance.signOut();
-        return const LoginPage();
+                return const LoginPage();
               }
             },
           );
@@ -163,8 +159,8 @@ class _LoginPageState extends State<LoginPage> {
 
       // 일반 관리자 승인 상태 확인
       final adminDoc = await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(userCredential.user!.uid)
+          .collection('account')
+          .doc(userCredential.user!.email)
           .get();
 
       debugPrint('🔍 [DEBUG] Admin 문서 존재: ${adminDoc.exists}');
@@ -281,13 +277,14 @@ class _LoginPageState extends State<LoginPage> {
 
       // 관리자 신청 정보 저장
       await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(userCredential.user!.uid)
+          .collection('account')
+          .doc(userCredential.user!.email)
           .set({
         'email': email,
         'deviceId': deviceId,
         'deviceName': deviceDoc.data()?['deviceName'] ?? 'Unknown Device',
         'isApproved': false,
+        'isSuperAdmin': false,
         'requestedAt': FieldValue.serverTimestamp(),
         'approvedAt': null,
         'approvedBy': null,
@@ -525,12 +522,12 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 class DeviceListPage extends StatelessWidget {
-  const DeviceListPage({super.key});
+  final bool isSuperAdmin;
+  const DeviceListPage({super.key, required this.isSuperAdmin});
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final isSuperAdmin = user?.email == 'ralph0830@gmail.com';
     
     return Scaffold(
       appBar: AppBar(
@@ -611,17 +608,49 @@ class DeviceListPage extends StatelessWidget {
               final device = devices[index].data() as Map<String, dynamic>;
               final deviceId = devices[index].id;
               final deviceName = device['deviceName'] ?? 'Unknown Device';
+              final nickname = device['nickname'] ?? '';
               final lastActive = device['lastActiveAt'] as Timestamp?;
               
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   leading: const Icon(Icons.phone_android, size: 32),
-                  title: Text(deviceName),
+                  title: Row(
+                    children: [
+                      Expanded(child: Text(deviceName)),
+                      if (nickname.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Text('닉네임: $nickname', style: const TextStyle(color: Colors.deepPurple)),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 20),
+                        tooltip: '닉네임 수정',
+                        onPressed: () {
+                          _showEditNicknameDialog(context, deviceId, nickname);
+                        },
+                      ),
+                    ],
+                  ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ID: ${deviceId.substring(0, 8)}...'),
+                      Row(
+                        children: [
+                          Text('ID: ${deviceId.substring(0, 8)}...'),
+                          if (isSuperAdmin)
+                            IconButton(
+                              icon: const Icon(Icons.copy, size: 18),
+                              tooltip: 'ID 복사',
+                              onPressed: () {
+                                Clipboard.setData(ClipboardData(text: deviceId));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('기기 ID가 클립보드에 복사되었습니다.')),
+                                );
+                              },
+                            ),
+                        ],
+                      ),
                       if (lastActive != null)
                         Text('마지막 활동: ${_formatDate(lastActive.toDate())}'),
                     ],
@@ -647,6 +676,37 @@ class DeviceListPage extends StatelessWidget {
     );
   }
   
+  void _showEditNicknameDialog(BuildContext context, String deviceId, String currentNickname) {
+    final controller = TextEditingController(text: currentNickname);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('기기 닉네임 수정'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: '닉네임',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newNickname = controller.text.trim();
+              await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'nickname': newNickname});
+              Navigator.pop(ctx);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
@@ -970,7 +1030,7 @@ class DeviceListPage extends StatelessWidget {
         debugPrint('🔍 [DEBUG] 추출된 뜻: "$koreanMeaning"');
         
         // 중복 체크 (Map 사용으로 빠른 검색)
-        final checkKey = '${englishWord}_${koreanPartOfSpeech}_${koreanMeaning}';
+        final checkKey = '${englishWord}_${koreanPartOfSpeech}_$koreanMeaning';
         if (existingWordsMap.containsKey(checkKey)) {
           debugPrint('🔍 [DEBUG] ❌ 중복 발견: $checkKey');
           debugPrint('🔍 [DEBUG] 기존 데이터: ${existingWordsMap[checkKey]}');
@@ -1574,7 +1634,7 @@ class AdminManagementPage extends StatelessWidget {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('admins')
+            .collection('account')
             .orderBy('requestedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -1677,8 +1737,8 @@ class AdminManagementPage extends StatelessWidget {
   Future<void> _approveAdmin(BuildContext context, String adminId, String email) async {
     try {
       await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(adminId)
+          .collection('account')
+          .doc(email)
           .update({
         'isApproved': true,
         'approvedAt': FieldValue.serverTimestamp(),
@@ -1701,10 +1761,9 @@ class AdminManagementPage extends StatelessWidget {
 
   Future<void> _rejectAdmin(BuildContext context, String adminId, String email) async {
     try {
-      // 관리자 정보 삭제
       await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(adminId)
+          .collection('account')
+          .doc(email)
           .delete();
       
       // Firebase Auth 계정도 삭제 (선택사항)

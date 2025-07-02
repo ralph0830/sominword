@@ -1,6 +1,7 @@
 import 'dart:io';
-import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:uuid/uuid.dart';
 
 class DeviceIdService {
   static const String _deviceIdKey = 'device_id';
@@ -23,10 +24,18 @@ class DeviceIdService {
     String? deviceId = prefs.getString(_deviceIdKey);
     
     if (deviceId == null) {
-      deviceId = Uuid().v4();
-      await prefs.setString(_deviceIdKey, deviceId);
+      final deviceInfo = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        deviceId = androidInfo.id;
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        deviceId = iosInfo.identifierForVendor;
+      } else {
+        deviceId = const Uuid().v4();
+      }
+      await prefs.setString(_deviceIdKey, deviceId!);
     }
-    
     _cachedDeviceId = deviceId;
     return deviceId;
   }
@@ -44,7 +53,6 @@ class DeviceIdService {
       deviceName = _generateDefaultDeviceName();
       await prefs.setString(_deviceNameKey, deviceName);
     }
-    
     _cachedDeviceName = deviceName;
     return deviceName;
   }
@@ -59,8 +67,7 @@ class DeviceIdService {
   /// 기본 기기 이름을 생성합니다.
   String _generateDefaultDeviceName() {
     final platform = Platform.operatingSystem;
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    return '${platform}_$timestamp';
+    return platform;
   }
 
   /// 캐시를 초기화합니다.

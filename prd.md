@@ -195,3 +195,22 @@ TTS 발음 기능 구현: flutter_tts 연동 및 스피커 아이콘 동작.
 - git 커밋/푸시 및 원격 저장소 관리 완료
 - systemd 서비스 파일로 관리자 페이지 서버 자동 실행 가능
 - ADB, 포트, 방화벽 등 환경 이슈 해결 경험 있음
+
+## [기기 고유값(디바이스 ID) 정책 및 일관성]
+
+- **기기 고유값(디바이스 ID) 생성 및 사용 정책**
+    - Android: device_info_plus 패키지의 `androidInfo.id` 값을 사용 (Settings.Secure.ANDROID_ID 기반)
+    - iOS: device_info_plus 패키지의 `iosInfo.identifierForVendor` 값을 사용
+    - 기타 플랫폼: 최초 실행 시 UUID를 생성하여 SharedPreferences에 저장 후 사용
+    - 최초 실행 시 위 값을 SharedPreferences에 저장하고, 이후에는 항상 이 값을 사용하여 Firestore 등 모든 데이터 연동에 일관성 유지
+
+- **앱 삭제/재설치 시 정책 및 한계**
+    - Android: ANDROID_ID는 앱 삭제 후 재설치 시 변경될 수 있음(플랫폼 정책)
+    - iOS: identifierForVendor는 동일 벤더의 앱이 모두 삭제되면 값이 변경될 수 있음
+    - 즉, 앱 삭제 후 재설치 시에는 기기 고유값이 바뀌는 것이 정상이며, 이는 모바일 OS 정책상 불가피함
+    - 앱을 삭제하지 않는 한, 어느 컴퓨터에서 빌드/설치/디버깅해도 동일 기기는 항상 같은 deviceId로 관리됨
+
+- **일관성 유지 방안**
+    - Firestore, 관리자 페이지, 사용자 앱 등 모든 경로에서 반드시 위 정책에 따라 생성된 deviceId만 사용
+    - deviceId 생성/사용 로직은 DeviceIdService에서만 관리하며, 프로젝트 전체에서 일관성 보장
+    - 앱 내에서 deviceId를 사용자에게 명확히 안내(복사/백업 등)하여, 필요시 수동 복구도 가능하도록 UX 제공
