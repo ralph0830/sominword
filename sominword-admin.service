@@ -1,0 +1,15 @@
+[Unit]
+Description=Sominword Admin Page
+After=network.target
+
+[Service]
+Type=simple
+User=ralph
+WorkingDirectory=/home/ralph/work/sominword/admin
+ExecStart=/usr/bin/flutter run -d chrome --web-port 8080 --release
+Restart=always
+RestartSec=10
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target 
