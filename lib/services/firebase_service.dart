@@ -161,4 +161,49 @@ class FirebaseService {
       return false;
     }
   }
+
+  /// 기기의 ownerEmail을 확인하고, 없으면 단어를 정리합니다.
+  Future<bool> checkAndCleanupWordsIfNoOwner() async {
+    try {
+      final deviceId = await _deviceIdService.getDeviceId();
+      final deviceDoc = await _firestore.collection('devices').doc(deviceId).get();
+      
+      if (!deviceDoc.exists) {
+        return false; // 기기가 등록되지 않음
+      }
+      
+      final deviceData = deviceDoc.data();
+      final ownerEmail = deviceData?['ownerEmail'];
+      
+      // ownerEmail이 null이거나 빈 문자열이거나 필드 자체가 없는 경우
+      if (ownerEmail == null || ownerEmail.toString().trim().isEmpty) {
+        // 해당 기기의 모든 단어 삭제
+        await _clearAllWords();
+        return false; // ownerEmail이 없으므로 접근 불가
+      }
+      
+      return true; // ownerEmail이 있으므로 접근 가능
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// 기기의 모든 단어를 삭제합니다.
+  Future<void> _clearAllWords() async {
+    try {
+      final wordsPath = await _deviceWordsPath;
+      final wordsSnapshot = await _firestore.collection(wordsPath).get();
+      
+      // 배치 작업으로 모든 단어 삭제
+      final batch = _firestore.batch();
+      for (final doc in wordsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      
+      await batch.commit();
+    } catch (e) {
+      // 삭제 실패 시 로그만 남기고 계속 진행
+      print('단어 삭제 중 오류 발생: $e');
+    }
+  }
 } 

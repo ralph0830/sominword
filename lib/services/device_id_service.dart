@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart';
 
 class DeviceIdService {
   static const String _deviceIdKey = 'device_id';
@@ -25,15 +25,29 @@ class DeviceIdService {
     
     if (deviceId == null) {
       final deviceInfo = DeviceInfoPlugin();
-      if (Platform.isAndroid) {
-        final androidInfo = await deviceInfo.androidInfo;
-        deviceId = androidInfo.id;
-      } else if (Platform.isIOS) {
-        final iosInfo = await deviceInfo.iosInfo;
-        deviceId = iosInfo.identifierForVendor;
-      } else {
+      
+      try {
+        if (kIsWeb) {
+          // 웹 환경에서는 UUID 생성
+          deviceId = const Uuid().v4();
+        } else {
+          // 모바일 환경에서만 Platform 체크
+          if (defaultTargetPlatform == TargetPlatform.android) {
+            final androidInfo = await deviceInfo.androidInfo;
+            deviceId = androidInfo.id;
+          } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+            final iosInfo = await deviceInfo.iosInfo;
+            deviceId = iosInfo.identifierForVendor;
+          } else {
+            // 기타 플랫폼에서는 UUID 생성
+            deviceId = const Uuid().v4();
+          }
+        }
+      } catch (e) {
+        // 예외 발생 시 UUID 생성
         deviceId = const Uuid().v4();
       }
+      
       await prefs.setString(_deviceIdKey, deviceId!);
     }
     _cachedDeviceId = deviceId;
@@ -66,8 +80,24 @@ class DeviceIdService {
 
   /// 기본 기기 이름을 생성합니다.
   String _generateDefaultDeviceName() {
-    final platform = Platform.operatingSystem;
-    return platform;
+    if (kIsWeb) {
+      return 'Web Browser';
+    }
+    
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'Android';
+      case TargetPlatform.iOS:
+        return 'iOS';
+      case TargetPlatform.windows:
+        return 'Windows';
+      case TargetPlatform.macOS:
+        return 'macOS';
+      case TargetPlatform.linux:
+        return 'Linux';
+      case TargetPlatform.fuchsia:
+        return 'Fuchsia';
+    }
   }
 
   /// 캐시를 초기화합니다.

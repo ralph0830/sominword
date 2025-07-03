@@ -18,5 +18,5 @@ Future<void> main() async {
     'approvedBy': email,
   }, SetOptions(merge: true));
 
-  print('슈퍼관리자 계정이 account 컬렉션에 생성되었습니다.');
+  // print('슈퍼관리자 계정이 account 컬렉션에 생성되었습니다.'); // 프로덕션에서는 사용하지 않음
 } 

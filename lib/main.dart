@@ -31,28 +31,38 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SominWord',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF6750A4),
+          brightness: Brightness.light,
+        ),
+        // Material 3 디자인 시스템 적용
+        cardTheme: const CardThemeData(
+          elevation: 2,
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 2,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        // 접근성 개선
+        textTheme: const TextTheme(
+          headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+          headlineMedium: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          bodyLarge: TextStyle(fontSize: 16),
+          bodyMedium: TextStyle(fontSize: 14),
+        ),
       ),
       home: const SplashScreen(),
     );
@@ -90,35 +100,57 @@ class _SplashScreenState extends State<SplashScreen> {
     // 기기가 등록되어 있는지 확인
     final isRegistered = await firebaseService.isDeviceRegistered();
     
-    setState(() {
-      deviceId = id;
-      isDeviceRegistered = isRegistered;
-    });
+    if (mounted) {
+      setState(() {
+        deviceId = id;
+        isDeviceRegistered = isRegistered;
+      });
+    }
 
     // 3초 후 처리
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
     
     if (isRegistered) {
-      // 기기가 등록되어 있으면 바로 앱으로 이동
-      _proceedToApp();
+      // 기기가 등록되어 있으면 ownerEmail 체크 수행
+      final hasValidOwner = await firebaseService.checkAndCleanupWordsIfNoOwner();
+      
+      if (hasValidOwner) {
+        // ownerEmail이 있으면 앱으로 이동
+        _proceedToApp();
+      } else {
+        // ownerEmail이 없으면 기기 ID 화면 표시 (승인 대기 중)
+        if (mounted) {
+          setState(() {
+            showDeviceId = true;
+          });
+        }
+      }
     } else {
       // 기기가 등록되어 있지 않으면 기기 ID 화면 표시
-      setState(() {
-        showDeviceId = true;
-      });
+      if (mounted) {
+        setState(() {
+          showDeviceId = true;
+        });
+      }
     }
   }
 
   void _copyDeviceId() {
     if (deviceId != null) {
       Clipboard.setData(ClipboardData(text: deviceId!));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('기기 고유번호가 클립보드에 복사되었습니다.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('기기 고유번호가 클립보드에 복사되었습니다.'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -131,84 +163,111 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     if (!showDeviceId) {
-      return Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Colors.blue, Colors.purple],
-            ),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Image.asset(
-                      'assets/images/app_icon.png',
-                      fit: BoxFit.contain,
-                      width: 120,
-                      height: 120,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  'SominWord',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        offset: Offset(0, 2),
-                        blurRadius: 4,
-                        color: Colors.black26,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '영어 단어 학습 앱',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                    shadows: [
-                      Shadow(
-                        offset: Offset(0, 1),
-                        blurRadius: 2,
-                        color: Colors.black26,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 40),
-                const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      return const _SplashLoadingView();
     }
 
+    return _DeviceIdView(
+      deviceId: deviceId,
+      onCopyDeviceId: _copyDeviceId,
+      onProceedToApp: _proceedToApp,
+    );
+  }
+}
+
+class _SplashLoadingView extends StatelessWidget {
+  const _SplashLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.blue, Colors.purple],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    'assets/images/app_icon.png',
+                    fit: BoxFit.contain,
+                    width: 120,
+                    height: 120,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'SominWord',
+                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  color: Colors.white,
+                  shadows: const [
+                    Shadow(
+                      offset: Offset(0, 2),
+                      blurRadius: 4,
+                      color: Colors.black26,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '영어 단어 학습 앱',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Colors.white70,
+                  shadows: const [
+                    Shadow(
+                      offset: Offset(0, 1),
+                      blurRadius: 2,
+                      color: Colors.black26,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeviceIdView extends StatelessWidget {
+  const _DeviceIdView({
+    required this.deviceId,
+    required this.onCopyDeviceId,
+    required this.onProceedToApp,
+  });
+
+  final String? deviceId;
+  final VoidCallback onCopyDeviceId;
+  final VoidCallback onProceedToApp;
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -248,13 +307,11 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   '기기 고유번호',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: Colors.white,
-                    shadows: [
+                    shadows: const [
                       Shadow(
                         offset: Offset(0, 2),
                         blurRadius: 4,
@@ -302,21 +359,17 @@ class _SplashScreenState extends State<SplashScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          ElevatedButton.icon(
-                            onPressed: _copyDeviceId,
+                          FilledButton.icon(
+                            onPressed: onCopyDeviceId,
                             icon: const Icon(Icons.copy),
                             label: const Text('복사'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                            ),
                           ),
                           const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: _proceedToApp,
+                          FilledButton.icon(
+                            onPressed: onProceedToApp,
                             icon: const Icon(Icons.arrow_forward),
                             label: const Text('앱 시작'),
-                            style: ElevatedButton.styleFrom(
+                            style: FilledButton.styleFrom(
                               backgroundColor: Colors.green,
                               foregroundColor: Colors.white,
                             ),
@@ -429,16 +482,18 @@ class _HomePageState extends State<HomePage> {
             const Text('관리자 페이지 접속 시 이 번호가 필요합니다.'),
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.blue, width: 1),
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.blue.withValues(alpha: 0.1),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
               ),
               child: Text(
                 deviceId ?? '로딩 중...',
-                style: const TextStyle(
-                  fontSize: 16,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
                 ),
@@ -452,28 +507,36 @@ class _HomePageState extends State<HomePage> {
             onPressed: () => Navigator.pop(ctx),
             child: const Text('닫기'),
           ),
-                      ElevatedButton.icon(
-              onPressed: () {
-                if (deviceId != null) {
-                  Clipboard.setData(ClipboardData(text: deviceId!));
+          FilledButton.icon(
+            onPressed: () {
+              if (deviceId != null) {
+                Clipboard.setData(ClipboardData(text: deviceId!));
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('기기 고유번호가 클립보드에 복사되었습니다.'),
-                      duration: Duration(seconds: 2),
+                    SnackBar(
+                      content: const Text('기기 고유번호가 클립보드에 복사되었습니다.'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   );
                 }
-                Navigator.pop(ctx);
-              },
-              icon: const Icon(Icons.copy),
-              label: const Text('복사'),
-            ),
+              }
+              Navigator.pop(ctx);
+            },
+            icon: const Icon(Icons.copy),
+            label: const Text('복사'),
+          ),
         ],
       ),
     );
   }
 
   Future<void> _fetchWords() async {
+    if (!mounted) return;
+    
     setState(() {
       isLoading = true;
       errorMsg = null;
@@ -483,25 +546,19 @@ class _HomePageState extends State<HomePage> {
     final firebaseService = FirebaseService();
     
     try {
-      debugPrint('🔍 [DEBUG] 단어 조회 시작...');
-      
       // 기기별 단어 조회
       final snapshot = await firebaseService.getWordsStream().first;
-      debugPrint('🔍 [DEBUG] Firestore에서 ${snapshot.docs.length}개 문서 조회됨');
+      
+      if (!mounted) return;
       
       words = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        debugPrint('🔍 [DEBUG] 문서 ID: ${doc.id}');
-        debugPrint('🔍 [DEBUG] 문서 데이터: $data');
-        debugPrint('🔍 [DEBUG] 문서 키들: ${data.keys.toList()}');
         
         final word = data['englishWord'] ?? data['english_word'] ?? '';
         final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
         final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
         final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
         final isFavorite = data['isFavorite'] ?? data['is_favorite'] ?? false;
-        
-        debugPrint('🔍 [DEBUG] 파싱 결과 - 영어: "$word", 품사: "$partOfSpeech", 뜻: "$meaning"');
         
         return {
           'id': doc.id,
@@ -513,34 +570,23 @@ class _HomePageState extends State<HomePage> {
         };
       }).toList();
       
-      debugPrint('🔍 [DEBUG] 최종 단어 목록: ${words.length}개');
-      if (words.isNotEmpty) {
-        debugPrint('🔍 [DEBUG] 첫 번째 단어: ${words.first}');
-      }
-      
       _filterTodayWords();
       currentIndex = 0;
     } catch (e) {
-      debugPrint('🔍 [DEBUG] 단어 조회 실패: $e');
-      
       // 네트워크 예외 발생 시 캐시 데이터 시도
       try {
-        debugPrint('🔍 [DEBUG] 캐시 데이터 시도 중...');
         final snapshot = await firebaseService.getWordsStream().first;
-        debugPrint('🔍 [DEBUG] 캐시에서 ${snapshot.docs.length}개 문서 조회됨');
+        
+        if (!mounted) return;
         
         words = snapshot.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          debugPrint('🔍 [DEBUG] 캐시 문서 ID: ${doc.id}');
-          debugPrint('🔍 [DEBUG] 캐시 문서 데이터: $data');
           
           final word = data['englishWord'] ?? data['english_word'] ?? '';
           final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
           final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
           final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
           final isFavorite = data['isFavorite'] ?? data['is_favorite'] ?? false;
-          
-          debugPrint('🔍 [DEBUG] 캐시 파싱 결과 - 영어: "$word", 품사: "$partOfSpeech", 뜻: "$meaning"');
           
           return {
             'id': doc.id,
@@ -552,20 +598,20 @@ class _HomePageState extends State<HomePage> {
           };
         }).toList();
         
-        debugPrint('🔍 [DEBUG] 캐시 최종 단어 목록: ${words.length}개');
-        
         _filterTodayWords();
         currentIndex = 0;
         isOffline = true;
         errorMsg = '네트워크 연결이 불안정하여 오프라인 캐시 데이터로 표시합니다.';
       } catch (e2) {
-        debugPrint('🔍 [DEBUG] 캐시 데이터도 실패: $e2');
         errorMsg = '단어 불러오기 실패(네트워크/캐시 모두 불가): $e';
       }
     }
-    setState(() {
-      isLoading = false;
-    });
+    
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   void _filterTodayWords() {
@@ -592,13 +638,30 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _speak(String text) async {
-    if (isSpeaking) return;
+    if (isSpeaking || !mounted) return;
+    
     setState(() { isSpeaking = true; });
+    
     try {
       await flutterTts.stop(); // 이전 발음 중지
       await flutterTts.speak(text);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('발음 재생 중 오류가 발생했습니다.'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
     } finally {
-      setState(() { isSpeaking = false; });
+      if (mounted) {
+        setState(() { isSpeaking = false; });
+      }
     }
   }
 
@@ -620,24 +683,49 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('즐겨찾기 단어'),
-        content: favoriteWords.isEmpty
-            ? const Text('즐겨찾기한 단어가 없습니다.')
-            : SizedBox(
-                width: 250,
-                child: ListView.builder(
+        content: SizedBox(
+          width: 300,
+          child: favoriteWords.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.star_border,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '즐겨찾기한 단어가 없습니다.',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
                   shrinkWrap: true,
                   itemCount: favoriteWords.length,
                   itemBuilder: (context, idx) {
                     final w = favoriteWords[idx];
-                    return ListTile(
-                      title: Text(w['word'] ?? ''),
-                      subtitle: Text('${w['partOfSpeech']} / ${w['meaning']}'),
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      child: ListTile(
+                        leading: const Icon(Icons.star, color: Colors.amber),
+                        title: Text(
+                          w['word'] ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text('${w['partOfSpeech']} / ${w['meaning']}'),
+                      ),
                     );
                   },
                 ),
-              ),
+        ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('닫기'),
           ),
@@ -680,6 +768,10 @@ class _HomePageState extends State<HomePage> {
             lastDay: DateTime.utc(2100, 12, 31),
             focusedDay: focusedDay,
             calendarFormat: CalendarFormat.month,
+            headerStyle: const HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+            ),
             eventLoader: (day) {
               final d = DateTime(day.year, day.month, day.day);
               return dateMap[d] ?? [];
@@ -690,16 +782,34 @@ class _HomePageState extends State<HomePage> {
                   return Positioned(
                     bottom: 1,
                     child: Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.blue,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   );
                 }
                 return null;
+              },
+              selectedBuilder: (context, day, focusedDay) {
+                return Container(
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${day.day}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
               },
             ),
             onDaySelected: (selectedDay, focusedDay) {
@@ -716,7 +826,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('닫기'),
           ),
@@ -740,67 +850,113 @@ class _HomePageState extends State<HomePage> {
         hideMeaning = true;
       }
     }
+    
     return Card(
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      elevation: 4,
+      margin: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         width: 320,
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.volume_up),
+                IconButton.filledTonal(
+                  icon: Icon(isSpeaking ? Icons.volume_off : Icons.volume_up),
                   onPressed: isSpeaking ? null : () => _speak(word),
                   tooltip: isSpeaking ? '발음 중...' : '발음 듣기',
                 ),
-                IconButton(
+                IconButton.filledTonal(
                   icon: Icon(isFavoriteWord(word) ? Icons.star : Icons.star_border),
-                  color: isFavoriteWord(word) ? Colors.amber : Colors.grey,
                   onPressed: () => toggleFavorite(word),
                   tooltip: '즐겨찾기',
+                  style: IconButton.styleFrom(
+                    foregroundColor: isFavoriteWord(word) ? Colors.amber : null,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             hideWord && !revealedWordIndexes.contains(idx)
                 ? GestureDetector(
                     onTap: () => revealWord(idx),
                     child: Container(
-                      width: 120,
-                      height: 48,
-                      color: Colors.grey[300],
+                      width: double.infinity,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                        ),
+                      ),
                       alignment: Alignment.center,
-                      child: const Text('영단어 가림', style: TextStyle(fontSize: 20, color: Colors.grey)),
+                      child: Text(
+                        '영단어 가림',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   )
-                : Text(
-                    word,
-                    style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+                : Semantics(
+                    label: '영어 단어: $word',
+                    child: Text(
+                      word,
+                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-            const SizedBox(height: 12),
-            Text(
-              partOfSpeech,
-              style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                partOfSpeech,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             hideMeaning && !revealedMeaningIndexes.contains(idx)
                 ? GestureDetector(
                     onTap: () => revealMeaning(idx),
                     child: Container(
-                      width: 120,
-                      height: 32,
-                      color: Colors.grey[300],
+                      width: double.infinity,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                        ),
+                      ),
                       alignment: Alignment.center,
-                      child: const Text('뜻 가림', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                      child: Text(
+                        '뜻 가림',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   )
-                : Text(
-                    meaning,
-                    style: const TextStyle(fontSize: 24),
+                : Semantics(
+                    label: '한글 뜻: $meaning',
+                    child: Text(
+                      meaning,
+                      style: Theme.of(context).textTheme.headlineMedium,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
           ],
         ),
@@ -811,8 +967,24 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '단어를 불러오는 중...',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
     if (errorMsg != null) {
@@ -820,27 +992,16 @@ class _HomePageState extends State<HomePage> {
         appBar: AppBar(
           title: GestureDetector(
             onTap: _onTitleTap,
-            child: const Text('SominWord'),
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.today),
-              onPressed: _toggleTodayWords,
-              tooltip: '오늘의 단어',
+            child: Text(
+              'SominWord',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
             ),
-          ],
-        ),
-        body: Center(child: Text(errorMsg!)),
-      );
-    }
-    final list = showTodayWords ? todayWords : words;
-    if (list.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: GestureDetector(
-            onTap: _onTitleTap,
-            child: const Text('SominWord'),
           ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          elevation: 0,
           actions: [
             IconButton(
               icon: const Icon(Icons.today),
@@ -850,7 +1011,96 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         body: Center(
-          child: Text(showTodayWords ? '오늘 추가된 단어가 없습니다.' : '등록된 단어가 없습니다.'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '오류가 발생했습니다',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  errorMsg!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _fetchWords,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('다시 시도'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    final list = showTodayWords ? todayWords : words;
+    if (list.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: GestureDetector(
+            onTap: _onTitleTap,
+            child: Text(
+              'SominWord',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
+            ),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.today),
+              onPressed: _toggleTodayWords,
+              tooltip: '오늘의 단어',
+            ),
+          ],
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                showTodayWords ? Icons.today : Icons.book,
+                size: 64,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                showTodayWords ? '오늘 추가된 단어가 없습니다.' : '등록된 단어가 없습니다.',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                showTodayWords 
+                    ? '관리자 페이지에서 오늘 단어를 추가해보세요.'
+                    : '관리자 페이지에서 단어를 추가해보세요.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -862,33 +1112,63 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: GestureDetector(
           onTap: _onTitleTap,
-          child: const Text('SominWord'),
+          child: Text(
+            'SominWord',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
         ),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        elevation: 0,
         actions: [
-          DropdownButton<StudyMode>(
-            value: mode,
-            underline: const SizedBox(),
-            icon: const Icon(Icons.menu_book, color: Colors.white),
-            dropdownColor: Colors.white,
-            onChanged: (StudyMode? newMode) {
-              if (newMode != null) setState(() => mode = newMode);
+          PopupMenuButton<StudyMode>(
+            icon: const Icon(Icons.menu_book),
+            tooltip: '학습 모드',
+            onSelected: (StudyMode newMode) {
+              setState(() => mode = newMode);
             },
-            items: const [
-              DropdownMenuItem(
+            itemBuilder: (context) => [
+              const PopupMenuItem(
                 value: StudyMode.normal,
-                child: Text('일반 모드'),
+                child: Row(
+                  children: [
+                    Icon(Icons.visibility),
+                    SizedBox(width: 8),
+                    Text('일반 모드'),
+                  ],
+                ),
               ),
-              DropdownMenuItem(
+              const PopupMenuItem(
                 value: StudyMode.hideMeaning,
-                child: Text('뜻 가리기'),
+                child: Row(
+                  children: [
+                    Icon(Icons.visibility_off),
+                    SizedBox(width: 8),
+                    Text('뜻 가리기'),
+                  ],
+                ),
               ),
-              DropdownMenuItem(
+              const PopupMenuItem(
                 value: StudyMode.hideWord,
-                child: Text('영단어 가리기'),
+                child: Row(
+                  children: [
+                    Icon(Icons.visibility_off),
+                    SizedBox(width: 8),
+                    Text('영단어 가리기'),
+                  ],
+                ),
               ),
-              DropdownMenuItem(
+              const PopupMenuItem(
                 value: StudyMode.randomHide,
-                child: Text('랜덤 가리기'),
+                child: Row(
+                  children: [
+                    Icon(Icons.shuffle),
+                    SizedBox(width: 8),
+                    Text('랜덤 가리기'),
+                  ],
+                ),
               ),
             ],
           ),
@@ -914,11 +1194,19 @@ class _HomePageState extends State<HomePage> {
                 child: Container(
                   color: Colors.orange,
                   width: double.infinity,
-                  padding: const EdgeInsets.all(6),
-                  child: const Text(
-                    '오프라인 모드: 캐시 데이터로 표시 중',
-                    style: TextStyle(color: Colors.white),
-                    textAlign: TextAlign.center,
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.wifi_off, color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        '오프라인 모드: 캐시 데이터로 표시 중',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               )
@@ -956,7 +1244,7 @@ class _HomePageState extends State<HomePage> {
             if (showTodayWords)
               Padding(
                 padding: const EdgeInsets.only(bottom: 24),
-                child: ElevatedButton.icon(
+                child: FilledButton.icon(
                   icon: const Icon(Icons.list),
                   label: const Text('전체 단어로 돌아가기'),
                   onPressed: _toggleTodayWords,

@@ -3,7 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 void main() async {
@@ -58,12 +57,31 @@ class AuthWrapper extends StatelessWidget {
                 );
               }
               
+              // Firestore account 문서가 없으면 자동 생성
+              if (adminSnapshot.data == null || !adminSnapshot.data!.exists) {
+                FirebaseFirestore.instance.collection('account').doc(user.email).set({
+                  'uid': user.uid,
+                  'email': user.email,
+                  'isApproved': false,
+                  'isSuperAdmin': false,
+                  'requestedAt': FieldValue.serverTimestamp(),
+                });
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              
               final adminData = adminSnapshot.data?.data() as Map<String, dynamic>?;
               final isSuperAdmin = adminData?['isSuperAdmin'] == true;
               final isApproved = adminData?['isApproved'] ?? false;
+              final email = adminData?['email'] as String?;
+              
+              debugPrint('🔍 [DEBUG] AuthWrapper: Admin 문서 존재: [33m${adminSnapshot.data?.exists}[0m');
+              debugPrint('🔍 [DEBUG] AuthWrapper: Admin 데이터: $adminData');
+              debugPrint('🔍 [DEBUG] AuthWrapper: isSuperAdmin: $isSuperAdmin, isApproved: $isApproved');
               
               if (isApproved) {
-                return DeviceListPage(isSuperAdmin: isSuperAdmin);
+                return DeviceListPage(isSuperAdmin: isSuperAdmin, email: email);
               } else {
                 FirebaseAuth.instance.signOut();
                 return const LoginPage();
@@ -275,11 +293,12 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text,
       );
 
-      // 관리자 신청 정보 저장
+      // Firestore account 문서 생성 (uid, email 동기화)
       await FirebaseFirestore.instance
           .collection('account')
           .doc(userCredential.user!.email)
           .set({
+        'uid': userCredential.user!.uid,
         'email': email,
         'deviceId': deviceId,
         'deviceName': deviceDoc.data()?['deviceName'] ?? 'Unknown Device',
@@ -523,27 +542,60 @@ class _LoginPageState extends State<LoginPage> {
 
 class DeviceListPage extends StatelessWidget {
   final bool isSuperAdmin;
-  const DeviceListPage({super.key, required this.isSuperAdmin});
+  final String? email;
+  const DeviceListPage({super.key, required this.isSuperAdmin, this.email});
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('기기별 단어 관리'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           if (isSuperAdmin)
-            IconButton(
-              icon: const Icon(Icons.admin_panel_settings),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AdminManagementPage()),
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('pendingDevices').snapshots(),
+              builder: (context, pendingSnapshot) {
+                final pendingCount = pendingSnapshot.data?.docs.length ?? 0;
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('account').where('isApproved', isEqualTo: false).snapshots(),
+                  builder: (context, adminSnapshot) {
+                    final adminCount = adminSnapshot.data?.docs.length ?? 0;
+                    final totalCount = pendingCount + adminCount;
+                    return Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.admin_panel_settings),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const AdminManagementPage()),
+                            );
+                          },
+                          tooltip: '관리자 승인 관리',
+                        ),
+                        if (totalCount > 0)
+                          Positioned(
+                            right: 6,
+                            top: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$totalCount',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 );
               },
-              tooltip: '관리자 승인 관리',
             ),
           if (isSuperAdmin)
             IconButton(
@@ -570,11 +622,25 @@ class DeviceListPage extends StatelessWidget {
           ),
         ],
       ),
+      floatingActionButton: !isSuperAdmin && email != null
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.add),
+              label: const Text('기기 추가 신청'),
+              onPressed: () => _showDeviceRequestDialog(context, email!),
+            )
+          : null,
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('devices')
-            .orderBy('lastActiveAt', descending: true)
-            .snapshots(),
+        stream: isSuperAdmin
+            ? FirebaseFirestore.instance
+                .collection('devices')
+                .orderBy('lastActiveAt', descending: true)
+                .snapshots()
+            : (email != null
+                ? FirebaseFirestore.instance
+                    .collection('devices')
+                    .where('ownerEmail', isEqualTo: email)
+                    .snapshots()
+                : const Stream.empty()),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -698,7 +764,9 @@ class DeviceListPage extends StatelessWidget {
             onPressed: () async {
               final newNickname = controller.text.trim();
               await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'nickname': newNickname});
-              Navigator.pop(ctx);
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+              }
             },
             child: const Text('저장'),
           ),
@@ -941,6 +1009,36 @@ class DeviceListPage extends StatelessWidget {
     }
   }
 
+  // 슈퍼 관리자 문서 생성
+  Future<void> createSuperAdminDocument(BuildContext context) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('account')
+          .doc('ralph0830@gmail.com')
+          .set({
+        'email': 'ralph0830@gmail.com',
+        'uid': 'BaEfFvIooSREqbZ9q9KbE7pZr9E2',
+        'isSuperAdmin': true,
+        'isApproved': true,
+        'approvedAt': FieldValue.serverTimestamp(),
+        'approvedBy': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('슈퍼 관리자 문서가 생성되었습니다.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('문서 생성 실패: $e')),
+        );
+      }
+    }
+  }
+
   // 루트 words 컬렉션의 모든 단어를 특정 기기로 마이그레이션 (상세 디버그 버전)
   Future<void> _migrateRootWordsToDevice(BuildContext context, String targetDeviceId) async {
     final firestore = FirebaseFirestore.instance;
@@ -1103,6 +1201,70 @@ class DeviceListPage extends StatelessWidget {
         );
       }
     }
+  }
+
+  void _showDeviceRequestDialog(BuildContext context, String email) {
+    final deviceIdController = TextEditingController();
+    final deviceNameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('기기 추가 신청'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: deviceIdController,
+              decoration: const InputDecoration(
+                labelText: '기기 고유번호',
+                border: OutlineInputBorder(),
+                hintText: '앱에서 확인한 기기 고유번호를 입력하세요',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: deviceNameController,
+              decoration: const InputDecoration(
+                labelText: '기기 이름',
+                border: OutlineInputBorder(),
+                hintText: '예: android, Web Browser 등',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final deviceId = deviceIdController.text.trim();
+              final deviceName = deviceNameController.text.trim();
+              if (deviceId.isEmpty || deviceName.isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('기기 고유번호와 이름을 모두 입력하세요.')),
+                );
+                return;
+              }
+              await FirebaseFirestore.instance.collection('pendingDevices').add({
+                'deviceId': deviceId,
+                'deviceName': deviceName,
+                'ownerEmail': email,
+                'requestedAt': FieldValue.serverTimestamp(),
+              });
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('기기 추가 신청이 완료되었습니다. 슈퍼 관리자의 승인을 기다려주세요.')),
+                );
+              }
+            },
+            child: const Text('신청'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1632,110 +1794,233 @@ class AdminManagementPage extends StatelessWidget {
         title: const Text('관리자 승인 관리'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('account')
-            .orderBy('requestedAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          
-          if (snapshot.hasError) {
-            return Center(child: Text('오류: ${snapshot.error}'));
-          }
-          
-          final admins = snapshot.data?.docs ?? [];
-          
-          if (admins.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: Column(
+        children: [
+          // Pending Devices Section
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('pendingDevices').orderBy('requestedAt', descending: true).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final pending = snapshot.data?.docs ?? [];
+              if (pending.isEmpty) {
+                return const SizedBox();
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.admin_panel_settings, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('관리자 신청이 없습니다.', style: TextStyle(fontSize: 18)),
-                ],
-              ),
-            );
-          }
-          
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: admins.length,
-            itemBuilder: (context, index) {
-              final admin = admins[index].data() as Map<String, dynamic>;
-              final adminId = admins[index].id;
-              final email = admin['email'] ?? '';
-              final deviceId = admin['deviceId'] ?? '';
-              final deviceName = admin['deviceName'] ?? 'Unknown Device';
-              final isApproved = admin['isApproved'] ?? false;
-              final requestedAt = admin['requestedAt'] as Timestamp?;
-              final approvedAt = admin['approvedAt'] as Timestamp?;
-              final approvedBy = admin['approvedBy'] as String?;
-              
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: Icon(
-                    isApproved ? Icons.check_circle : Icons.pending,
-                    color: isApproved ? Colors.green : Colors.orange,
-                    size: 32,
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text('기기 추가 신청', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
-                  title: Text(email),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('기기: $deviceName'),
-                      Text('기기 ID: ${deviceId.substring(0, 8)}...'),
-                      if (requestedAt != null)
-                        Text('신청일: ${_formatDate(requestedAt.toDate())}'),
-                      if (isApproved && approvedAt != null)
-                        Text('승인일: ${_formatDate(approvedAt.toDate())}'),
-                      if (isApproved && approvedBy != null)
-                        Text('승인자: $approvedBy'),
-                    ],
-                  ),
-                  trailing: isApproved
-                      ? const Chip(
-                          label: Text('승인됨'),
-                          backgroundColor: Colors.green,
-                          labelStyle: TextStyle(color: Colors.white),
-                        )
-                      : Row(
+                  ...pending.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final deviceId = data['deviceId'] ?? '';
+                    final deviceName = data['deviceName'] ?? '';
+                    final ownerEmail = data['ownerEmail'] ?? '';
+                    final requestedAt = data['requestedAt'] as Timestamp?;
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: ListTile(
+                        leading: const Icon(Icons.device_hub, size: 32),
+                        title: Text('$deviceName ($deviceId)'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('신청자: $ownerEmail'),
+                            if (requestedAt != null)
+                              Text('신청일: [33m${_formatDate(requestedAt.toDate())}[0m'),
+                          ],
+                        ),
+                        trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ElevatedButton(
-                              onPressed: () => _approveAdmin(context, adminId, email),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                              ),
+                              onPressed: () => _approveDevice(context, doc.id, deviceId, ownerEmail, deviceName: deviceName),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                               child: const Text('승인'),
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton(
-                              onPressed: () => _rejectAdmin(context, adminId, email),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                              ),
+                              onPressed: () => _rejectDevice(context, doc.id),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                               child: const Text('거부'),
-            ),
-          ],
-        ),
-                ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
               );
             },
-          );
-        },
+          ),
+          // 기존 관리자 승인 관리 UI
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('account')
+                  .orderBy('requestedAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                if (snapshot.hasError) {
+                  return Center(child: Text('오류: ${snapshot.error}'));
+                }
+                
+                final admins = snapshot.data?.docs ?? [];
+                
+                if (admins.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.admin_panel_settings, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text('관리자 신청이 없습니다.', style: TextStyle(fontSize: 18)),
+                      ],
+                    ),
+                  );
+                }
+                
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: admins.length,
+                  itemBuilder: (context, index) {
+                    final admin = admins[index].data() as Map<String, dynamic>;
+                    final adminId = admins[index].id;
+                    final email = admin['email'] ?? '';
+                    final deviceId = admin['deviceId'] ?? '';
+                    final deviceName = admin['deviceName'] ?? 'Unknown Device';
+                    final isApproved = admin['isApproved'] ?? false;
+                    final requestedAt = admin['requestedAt'] as Timestamp?;
+                    final approvedAt = admin['approvedAt'] as Timestamp?;
+                    final approvedBy = admin['approvedBy'] as String?;
+                    
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        leading: Icon(
+                          isApproved ? Icons.check_circle : Icons.pending,
+                          color: isApproved ? Colors.green : Colors.orange,
+                          size: 32,
+                        ),
+                        title: Text(email),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('기기: $deviceName'),
+                            Text('기기 ID: ${deviceId.substring(0, 8)}...'),
+                            if (requestedAt != null)
+                              Text('신청일: ${_formatDate(requestedAt.toDate())}'),
+                            if (isApproved && approvedAt != null)
+                              Text('승인일: ${_formatDate(approvedAt.toDate())}'),
+                            if (isApproved && approvedBy != null)
+                              Text('승인자: $approvedBy'),
+                          ],
+                        ),
+                        trailing: isApproved
+                            ? const Chip(
+                                label: Text('승인됨'),
+                                backgroundColor: Colors.green,
+                                labelStyle: TextStyle(color: Colors.white),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ElevatedButton(
+                                    onPressed: () => _approveAdmin(context, adminId, email),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('승인'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(
+                                    onPressed: () => _rejectAdmin(context, adminId, email),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('거부'),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Future<void> _approveDevice(BuildContext context, String pendingId, String deviceId, String ownerEmail, {String? deviceName}) async {
+    try {
+      final deviceRef = FirebaseFirestore.instance.collection('devices').doc(deviceId);
+      final deviceSnap = await deviceRef.get();
+      if (deviceSnap.exists) {
+        await deviceRef.update({
+          'ownerEmail': ownerEmail,
+          if (deviceName != null) 'deviceName': deviceName,
+        });
+      } else {
+        await deviceRef.set({
+          'deviceId': deviceId,
+          'deviceName': deviceName ?? 'Unknown',
+          'ownerEmail': ownerEmail,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await FirebaseFirestore.instance.collection('pendingDevices').doc(pendingId).delete();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('기기 추가가 승인되었습니다.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('기기 승인 실패: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectDevice(BuildContext context, String pendingId) async {
+    try {
+      await FirebaseFirestore.instance.collection('pendingDevices').doc(pendingId).delete();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('기기 추가 신청이 거부되었습니다.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('거부 실패: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _approveAdmin(BuildContext context, String adminId, String email) async {
     try {
+      // account 문서에서 deviceId 또는 deviceIds 배열 가져오기
+      final adminDoc = await FirebaseFirestore.instance.collection('account').doc(email).get();
+      final adminData = adminDoc.data();
+      final deviceId = adminData?['deviceId'];
+      final deviceIds = adminData?['deviceIds'] as List<dynamic>?;
+
+      // account 승인 처리
       await FirebaseFirestore.instance
           .collection('account')
           .doc(email)
@@ -1744,7 +2029,22 @@ class AdminManagementPage extends StatelessWidget {
         'approvedAt': FieldValue.serverTimestamp(),
         'approvedBy': FirebaseAuth.instance.currentUser?.email ?? 'Unknown',
       });
-      
+
+      // 여러 기기 확장: deviceIds 배열이 있으면 모두 ownerEmail 추가, 없으면 기존 deviceId 처리
+      if (deviceIds != null && deviceIds.isNotEmpty) {
+        for (final id in deviceIds) {
+          await FirebaseFirestore.instance
+              .collection('devices')
+              .doc(id)
+              .update({'ownerEmail': email});
+        }
+      } else if (deviceId != null) {
+        await FirebaseFirestore.instance
+            .collection('devices')
+            .doc(deviceId)
+            .update({'ownerEmail': email});
+      }
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$email 관리자가 승인되었습니다.')),
