@@ -563,35 +563,49 @@ class DeviceListPage extends StatelessWidget {
                   builder: (context, adminSnapshot) {
                     final adminCount = adminSnapshot.data?.docs.length ?? 0;
                     final totalCount = pendingCount + adminCount;
-                    return Stack(
-                      alignment: Alignment.topRight,
+                    return Row(
                       children: [
+                        Stack(
+                          alignment: Alignment.topRight,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.admin_panel_settings),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const AdminManagementPage()),
+                                );
+                              },
+                              tooltip: '관리자 승인 관리',
+                            ),
+                            if (totalCount > 0)
+                              Positioned(
+                                right: 6,
+                                top: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '$totalCount',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                         IconButton(
-                          icon: const Icon(Icons.admin_panel_settings),
+                          icon: const Icon(Icons.verified_user),
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const AdminManagementPage()),
+                              MaterialPageRoute(builder: (context) => const DeviceApprovalStatusPage()),
                             );
                           },
-                          tooltip: '관리자 승인 관리',
+                          tooltip: '기기별 승인 현황',
                         ),
-                        if (totalCount > 0)
-                          Positioned(
-                            right: 6,
-                            top: 6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '$totalCount',
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
                       ],
                     );
                   },
@@ -1246,19 +1260,40 @@ class DeviceListPage extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               final deviceId = deviceIdController.text.trim();
-              final deviceName = deviceNameController.text.trim();
-              if (deviceId.isEmpty || deviceName.isEmpty) {
+              debugPrint('[DEBUG] 입력된 deviceId: $deviceId');
+
+              // Firestore에서 해당 deviceId 문서 조회
+              final deviceDoc = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+
+              if (!deviceDoc.exists) {
+                debugPrint('[DEBUG] 입력된 deviceId가 Firestore에 존재하지 않음.');
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('기기 고유번호와 이름을 모두 입력하세요.')),
+                  const SnackBar(content: Text('등록된 고유 번호가 아닙니다. 앱을 기기에서 최소 1회 실행해주세요.')),
                 );
                 return;
               }
+
+              final data = deviceDoc.data();
+              debugPrint('[DEBUG] Firestore에서 조회된 device 데이터: ' + data.toString());
+
+              if (data?['ownerEmail'] != null && (data?['ownerEmail'] as String).isNotEmpty) {
+                debugPrint('[DEBUG] 이미 ownerEmail이 존재함: ${data?['ownerEmail']}');
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('이미 등록된 번호입니다.')),
+                );
+                return;
+              }
+
+              final deviceName = data?['deviceName'] ?? 'Unknown Device';
+              debugPrint('[DEBUG] Firestore에서 가져온 deviceName: $deviceName');
+
               await FirebaseFirestore.instance.collection('pendingDevices').add({
                 'deviceId': deviceId,
                 'deviceName': deviceName,
                 'ownerEmail': email,
                 'requestedAt': FieldValue.serverTimestamp(),
               });
+              debugPrint('[DEBUG] pendingDevices에 신청 완료: deviceId=$deviceId, deviceName=$deviceName, ownerEmail=$email');
               if (ctx.mounted) {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(ctx).showSnackBar(
@@ -1984,8 +2019,18 @@ class AdminManagementPage extends StatelessWidget {
           'deviceId': deviceId,
           'deviceName': deviceName ?? 'Unknown',
           'ownerEmail': ownerEmail,
+          'nickname': null,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        // words 서브컬렉션에 apple(명사, 사과) 단어 추가
+        await deviceRef.collection('words').add({
+          'englishWord': 'apple',
+          'koreanPartOfSpeech': '명사',
+          'koreanMeaning': '사과',
+          'inputTimestamp': FieldValue.serverTimestamp(),
+          'isFavorite': false,
+        });
+        debugPrint('[DEBUG] words 서브컬렉션에 apple(명사, 사과) 단어 추가 완료: deviceId=$deviceId');
       }
       await FirebaseFirestore.instance.collection('pendingDevices').doc(pendingId).delete();
       if (context.mounted) {
@@ -2092,5 +2137,64 @@ class AdminManagementPage extends StatelessWidget {
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+}
+
+class DeviceApprovalStatusPage extends StatelessWidget {
+  const DeviceApprovalStatusPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('기기별 승인 현황'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('devices').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('오류: \\${snapshot.error}'));
+          }
+          final devices = snapshot.data?.docs ?? [];
+          if (devices.isEmpty) {
+            return const Center(child: Text('등록된 기기가 없습니다.'));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: devices.length,
+            itemBuilder: (context, index) {
+              final data = devices[index].data() as Map<String, dynamic>;
+              final deviceId = data['deviceId'] ?? devices[index].id;
+              final deviceName = data['deviceName'] ?? '';
+              final ownerEmail = data['ownerEmail'] ?? '';
+              final createdAt = data['createdAt'];
+              final lastActiveAt = data['lastActiveAt'];
+              final nickname = data['nickname'] ?? '';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.verified_user, color: Colors.blue, size: 32),
+                  title: Text('ID: $deviceId'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('기기명: $deviceName'),
+                      Text('소유자: ${ownerEmail.isNotEmpty ? ownerEmail : '미지정'}'),
+                      if (nickname.isNotEmpty) Text('별명: $nickname'),
+                      if (createdAt != null) Text('생성일: \\${createdAt is Timestamp ? createdAt.toDate() : createdAt}'),
+                      if (lastActiveAt != null) Text('마지막 활동: \\${lastActiveAt is Timestamp ? lastActiveAt.toDate() : lastActiveAt}'),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 }

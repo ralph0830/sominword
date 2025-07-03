@@ -23,7 +23,7 @@ void main() async {
   final deviceIdService = DeviceIdService();
   final firebaseService = FirebaseService();
   await deviceIdService.getDeviceId(); // 기기 ID 생성/확인
-  await firebaseService.saveDeviceInfo(); // 기기 정보를 Firebase에 저장
+  await firebaseService.saveDeviceInfoIfNotExists(); // 기기 정보를 Firebase에 저장 (존재하지 않을 때만 등록)
   
   runApp(const MyApp());
 }

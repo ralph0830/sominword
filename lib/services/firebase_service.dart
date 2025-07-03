@@ -16,17 +16,37 @@ class FirebaseService {
     return 'devices/$deviceId/words';
   }
 
-  /// 기기 정보를 저장합니다.
-  Future<void> saveDeviceInfo() async {
+  /// 기기 정보를 저장합니다. (존재하지 않을 때만 등록)
+  Future<void> saveDeviceInfoIfNotExists() async {
     final deviceId = await _deviceIdService.getDeviceId();
-    final deviceName = await _deviceIdService.getDeviceName();
-    
-    await _firestore.collection('devices').doc(deviceId).set({
-      'deviceId': deviceId,
-      'deviceName': deviceName,
-      'createdAt': FieldValue.serverTimestamp(),
-      'lastActiveAt': FieldValue.serverTimestamp(),
-    });
+    final deviceDoc = await _firestore.collection('devices').doc(deviceId).get();
+
+    if (!deviceDoc.exists) {
+      final deviceName = await _deviceIdService.getDeviceName();
+      await _firestore.collection('devices').doc(deviceId).set({
+        'deviceId': deviceId,
+        'deviceName': deviceName,
+        'nickname': null,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      });
+
+      // words 서브컬렉션에 apple(명사, 사과) 단어 추가
+      await _firestore
+          .collection('devices')
+          .doc(deviceId)
+          .collection('words')
+          .add({
+        'englishWord': 'apple',
+        'koreanPartOfSpeech': '명사',
+        'koreanMeaning': '사과',
+        'inputTimestamp': FieldValue.serverTimestamp(),
+        'isFavorite': false,
+      });
+    } else {
+      // 이미 등록된 경우, lastActiveAt만 갱신
+      await updateDeviceInfo();
+    }
   }
 
   /// 기기 정보를 업데이트합니다.
