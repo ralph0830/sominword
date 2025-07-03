@@ -81,6 +81,7 @@ class _SplashScreenState extends State<SplashScreen> {
   String? deviceId;
   bool showDeviceId = false;
   bool isDeviceRegistered = false;
+  int deviceStatus = 0; // 0: 미등록, 1: 승인대기, 2: 정상
 
   @override
   void initState() {
@@ -97,13 +98,14 @@ class _SplashScreenState extends State<SplashScreen> {
     final firebaseService = FirebaseService();
     final id = await deviceIdService.getDeviceId();
     
-    // 기기가 등록되어 있는지 확인
-    final isRegistered = await firebaseService.isDeviceRegistered();
+    // 기기 등록 상태 확인
+    final status = await firebaseService.getDeviceRegistrationStatus();
     
     if (mounted) {
       setState(() {
         deviceId = id;
-        isDeviceRegistered = isRegistered;
+        deviceStatus = status;
+        isDeviceRegistered = status > 0;
       });
     }
 
@@ -111,23 +113,11 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
     
-    if (isRegistered) {
-      // 기기가 등록되어 있으면 ownerEmail 체크 수행
-      final hasValidOwner = await firebaseService.checkAndCleanupWordsIfNoOwner();
-      
-      if (hasValidOwner) {
-        // ownerEmail이 있으면 앱으로 이동
-        _proceedToApp();
-      } else {
-        // ownerEmail이 없으면 기기 ID 화면 표시 (승인 대기 중)
-        if (mounted) {
-          setState(() {
-            showDeviceId = true;
-          });
-        }
-      }
+    if (status == 2) {
+      // 기기가 등록되고 ownerEmail이 있으면 앱으로 이동
+      _proceedToApp();
     } else {
-      // 기기가 등록되어 있지 않으면 기기 ID 화면 표시
+      // 기기가 등록되지 않았거나 승인 대기 중이면 기기 ID 화면 표시
       if (mounted) {
         setState(() {
           showDeviceId = true;
@@ -168,6 +158,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     return _DeviceIdView(
       deviceId: deviceId,
+      deviceStatus: deviceStatus,
       onCopyDeviceId: _copyDeviceId,
       onProceedToApp: _proceedToApp,
     );
@@ -258,13 +249,56 @@ class _SplashLoadingView extends StatelessWidget {
 class _DeviceIdView extends StatelessWidget {
   const _DeviceIdView({
     required this.deviceId,
+    required this.deviceStatus,
     required this.onCopyDeviceId,
     required this.onProceedToApp,
   });
 
   final String? deviceId;
+  final int deviceStatus;
   final VoidCallback onCopyDeviceId;
   final VoidCallback onProceedToApp;
+
+  String _getStatusMessage() {
+    switch (deviceStatus) {
+      case 0:
+        return '기기가 등록되지 않았습니다.';
+      case 1:
+        return '승인 대기 중입니다.';
+      case 2:
+        return '기기가 정상 등록되었습니다.';
+      default:
+        return '알 수 없는 상태입니다.';
+    }
+  }
+
+  Color _getBorderColor() {
+    switch (deviceStatus) {
+      case 0:
+        return Colors.red;
+      case 1:
+        return Colors.yellow;
+      case 2:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getHelpMessage() {
+    switch (deviceStatus) {
+      case 0:
+        return '관리자 페이지에서 기기를 등록해주세요.';
+      case 1:
+        return '관리자 페이지에서 승인을 기다리고 있습니다.';
+      case 2:
+        return '관리자 페이지에서 이 번호를 입력하여 단어를 추가/수정할 수 있습니다.';
+      default:
+        return '도움말을 찾을 수 없습니다.';
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -321,9 +355,9 @@ class _DeviceIdView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  '관리자 페이지 접속 시 이 번호가 필요합니다.',
-                  style: TextStyle(
+                Text(
+                  _getStatusMessage(),
+                  style: const TextStyle(
                     fontSize: 16,
                     color: Colors.white70,
                     shadows: [
@@ -340,9 +374,9 @@ class _DeviceIdView extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.blue, width: 2),
+                    border: Border.all(color: _getBorderColor(), width: 2),
                     borderRadius: BorderRadius.circular(12),
-                    color: Colors.blue.withValues(alpha: 0.1),
+                    color: _getBorderColor().withValues(alpha: 0.1),
                   ),
                   child: Column(
                     children: [
@@ -364,25 +398,27 @@ class _DeviceIdView extends StatelessWidget {
                             icon: const Icon(Icons.copy),
                             label: const Text('복사'),
                           ),
-                          const SizedBox(width: 12),
-                          FilledButton.icon(
-                            onPressed: onProceedToApp,
-                            icon: const Icon(Icons.arrow_forward),
-                            label: const Text('앱 시작'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
+                          if (deviceStatus == 2) ...[
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: onProceedToApp,
+                              icon: const Icon(Icons.arrow_forward),
+                              label: const Text('앱 시작'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  '💡 관리자 페이지에서 이 번호를 입력하여\n단어를 추가/수정할 수 있습니다.',
-                  style: TextStyle(
+                Text(
+                  _getHelpMessage(),
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white60,
                     shadows: [
@@ -431,6 +467,7 @@ class _HomePageState extends State<HomePage> {
   // 앱 제목 클릭 관련 변수
   int titleClickCount = 0;
   String? deviceId;
+  int deviceStatus = 0; // 0: 미등록, 1: 승인대기, 2: 정상
 
   @override
   void initState() {
@@ -534,6 +571,39 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  IconData _getErrorIcon() {
+    switch (deviceStatus) {
+      case 0:
+        return Icons.device_unknown;
+      case 1:
+        return Icons.pending;
+      default:
+        return Icons.error_outline;
+    }
+  }
+
+  Color _getErrorColor() {
+    switch (deviceStatus) {
+      case 0:
+        return Colors.red;
+      case 1:
+        return Colors.orange;
+      default:
+        return Theme.of(context).colorScheme.error;
+    }
+  }
+
+  String _getErrorTitle() {
+    switch (deviceStatus) {
+      case 0:
+        return '기기 등록 필요';
+      case 1:
+        return '승인 대기 중';
+      default:
+        return '오류가 발생했습니다';
+    }
+  }
+
   Future<void> _fetchWords() async {
     if (!mounted) return;
     
@@ -546,7 +616,37 @@ class _HomePageState extends State<HomePage> {
     final firebaseService = FirebaseService();
     
     try {
-      // 기기별 단어 조회
+      // 기기 등록 상태 확인
+      final status = await firebaseService.getDeviceRegistrationStatus();
+      
+      if (!mounted) return;
+      
+      setState(() {
+        deviceStatus = status;
+      });
+      
+      // 기기 상태에 따른 처리
+      if (status == 0) {
+        // 기기가 등록되지 않음
+        setState(() {
+          isLoading = false;
+          errorMsg = '기기 등록이 필요합니다.';
+          words = [];
+          todayWords = [];
+        });
+        return;
+      } else if (status == 1) {
+        // 기기가 등록되었지만 ownerEmail이 없음 (승인 대기 중)
+        setState(() {
+          isLoading = false;
+          errorMsg = '기기 등록이 되었습니다. 관리자 승인이 필요합니다.';
+          words = [];
+          todayWords = [];
+        });
+        return;
+      }
+      
+      // status == 2인 경우에만 단어 조회 진행
       final snapshot = await firebaseService.getWordsStream().first;
       
       if (!mounted) return;
@@ -1017,15 +1117,15 @@ class _HomePageState extends State<HomePage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.error_outline,
+                  _getErrorIcon(),
                   size: 64,
-                  color: Theme.of(context).colorScheme.error,
+                  color: _getErrorColor(),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  '오류가 발생했습니다',
+                  _getErrorTitle(),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
+                    color: _getErrorColor(),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1037,11 +1137,56 @@ class _HomePageState extends State<HomePage> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: _fetchWords,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('다시 시도'),
-                ),
+                if (deviceStatus == 0 || deviceStatus == 1) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: _getErrorColor(), width: 1),
+                      borderRadius: BorderRadius.circular(12),
+                      color: _getErrorColor().withValues(alpha: 0.1),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '기기 고유번호',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          deviceId ?? '로딩 중...',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: () {
+                            if (deviceId != null) {
+                              Clipboard.setData(ClipboardData(text: deviceId!));
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('기기 고유번호가 클립보드에 복사되었습니다.'),
+                                    duration: const Duration(seconds: 2),
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.copy),
+                          label: const Text('복사'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

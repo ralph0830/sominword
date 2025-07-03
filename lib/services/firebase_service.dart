@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'device_id_service.dart';
 
 class FirebaseService {
@@ -203,7 +204,34 @@ class FirebaseService {
       await batch.commit();
     } catch (e) {
       // 삭제 실패 시 로그만 남기고 계속 진행
-      print('단어 삭제 중 오류 발생: $e');
+      debugPrint('단어 삭제 중 오류 발생: $e');
+    }
+  }
+
+  /// 기기 등록 상태를 확인하고 적절한 상태를 반환합니다.
+  /// 0: 기기가 등록되지 않음
+  /// 1: 기기가 등록되었지만 ownerEmail이 없음 (승인 대기 중)
+  /// 2: 기기가 등록되고 ownerEmail이 있음 (정상 사용 가능)
+  Future<int> getDeviceRegistrationStatus() async {
+    try {
+      final deviceId = await _deviceIdService.getDeviceId();
+      final deviceDoc = await _firestore.collection('devices').doc(deviceId).get();
+      
+      if (!deviceDoc.exists) {
+        return 0; // 기기가 등록되지 않음
+      }
+      
+      final deviceData = deviceDoc.data();
+      final ownerEmail = deviceData?['ownerEmail'];
+      
+      // ownerEmail이 null이거나 빈 문자열이거나 필드 자체가 없는 경우
+      if (ownerEmail == null || ownerEmail.toString().trim().isEmpty) {
+        return 1; // 기기는 등록되었지만 ownerEmail이 없음 (승인 대기 중)
+      }
+      
+      return 2; // 기기가 등록되고 ownerEmail이 있음 (정상 사용 가능)
+    } catch (e) {
+      return 0; // 오류 발생 시 등록되지 않은 것으로 처리
     }
   }
 } 
