@@ -10,6 +10,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
   runApp(const AdminApp());
 }
 
@@ -703,7 +704,12 @@ class DeviceListPage extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text('ID: ${deviceId.substring(0, 8)}...'),
+                          Expanded(
+                            child: SelectableText(
+                              'ID: $deviceId',
+                              style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+                            ),
+                          ),
                           if (isSuperAdmin)
                             IconButton(
                               icon: const Icon(Icons.copy, size: 18),
@@ -1861,6 +1867,7 @@ class AdminManagementPage extends StatelessWidget {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('account')
+                  .where('isSuperAdmin', isEqualTo: false)
                   .orderBy('requestedAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
@@ -1881,7 +1888,7 @@ class AdminManagementPage extends StatelessWidget {
                       children: [
                         Icon(Icons.admin_panel_settings, size: 64, color: Colors.grey),
                         SizedBox(height: 16),
-                        Text('관리자 신청이 없습니다.', style: TextStyle(fontSize: 18)),
+                        Text('관리자 신청/승인 내역이 없습니다.', style: TextStyle(fontSize: 18)),
                       ],
                     ),
                   );
@@ -1914,7 +1921,7 @@ class AdminManagementPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('기기: $deviceName'),
-                            Text('기기 ID: ${deviceId.substring(0, 8)}...'),
+                            Text('기기 ID: $deviceId'),
                             if (requestedAt != null)
                               Text('신청일: ${_formatDate(requestedAt.toDate())}'),
                             if (isApproved && approvedAt != null)

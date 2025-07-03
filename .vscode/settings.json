@@ -1,0 +1,20 @@
+{
+  "firebase.features": {
+    "dataconnect": false,
+    "hosting": true,
+    "firestore": true,
+    "functions": false,
+    "storage": false,
+    "emulators": true
+  },
+  "firebase.defaultProject": "sominword",
+  "firebase.autoLogin": true,
+  "firebase.showChannel": false,
+  "firebase.showEmulatorUI": false,
+  "extensions.ignoreRecommendations": false,
+  "workbench.extensions.ignoreRecommendations": false,
+  "googlecloudtools.firebase-dataconnect-vscode.enabled": false,
+  "firebase.dataconnect.enabled": false,
+  "firebase.dataconnect.showInExplorer": false,
+  "firebase.dataconnect.showInCommandPalette": false
+} 
