@@ -451,6 +451,7 @@ enum StudyMode { normal, hideMeaning, hideWord, randomHide }
 
 class _HomePageState extends State<HomePage> {
   int currentIndex = 0;
+  int prevIndex = 0; // 이전 인덱스 저장
   List<Map<String, dynamic>> words = [];
   List<Map<String, dynamic>> todayWords = [];
   bool isLoading = true;
@@ -851,8 +852,14 @@ class _HomePageState extends State<HomePage> {
     final dateMap = <DateTime, List<int>>{};
     for (int i = 0; i < words.length; i++) {
       final ts = words[i]['input_timestamp'];
+      DateTime? date;
       if (ts is DateTime) {
-        final date = DateTime(ts.year, ts.month, ts.day);
+        date = DateTime(ts.year, ts.month, ts.day);
+      } else if (ts is Timestamp) {
+        final d = ts.toDate();
+        date = DateTime(d.year, d.month, d.day);
+      }
+      if (date != null) {
         dateMap.putIfAbsent(date, () => []).add(i);
       }
     }
@@ -872,42 +879,125 @@ class _HomePageState extends State<HomePage> {
               formatButtonVisible: false,
               titleCentered: true,
             ),
-            eventLoader: (day) {
-              final d = DateTime(day.year, day.month, day.day);
-              return dateMap[d] ?? [];
-            },
             calendarBuilders: CalendarBuilders(
-              markerBuilder: (context, day, events) {
-                if (events.isNotEmpty) {
-                  return Positioned(
-                    bottom: 1,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.primary,
+              defaultBuilder: (context, day, focusedDay) {
+                final d = DateTime(day.year, day.month, day.day);
+                final count = dateMap[d]?.length ?? 0;
+                debugPrint('[캘린더] $d: $count개');
+                return Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${day.day}',
+                          style: TextStyle(
+                            fontSize: 18, // 날짜 글씨 크게
+                            fontWeight: FontWeight.bold,
+                            color: count > 0 ? Theme.of(context).colorScheme.primary : null,
+                          ),
+                        ),
                       ),
-                    ),
-                  );
-                }
-                return null;
+                      if (count > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              fontSize: 11, // 단어 개수는 작게
+                              color: Colors.blueAccent.withOpacity(0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      if (count == 0)
+                        const SizedBox(height: 15), // 단어 개수 없을 때도 높이 맞춤
+                    ],
+                  ),
+                );
               },
               selectedBuilder: (context, day, focusedDay) {
+                final d = DateTime(day.year, day.month, day.day);
+                final count = dateMap[d]?.length ?? 0;
                 return Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${day.day}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${day.day}',
+                          style: TextStyle(
+                            fontSize: 18, // 날짜 글씨 크게
+                            fontWeight: FontWeight.bold,
+                            color: count > 0 ? Theme.of(context).colorScheme.primary : null,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (count > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              fontSize: 11, // 단어 개수는 작게
+                              color: Colors.blueAccent.withOpacity(0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      if (count == 0)
+                        const SizedBox(height: 15), // 단어 개수 없을 때도 높이 맞춤
+                    ],
+                  ),
+                );
+              },
+              todayBuilder: (context, day, focusedDay) {
+                final d = DateTime(day.year, day.month, day.day);
+                final count = dateMap[d]?.length ?? 0;
+                return Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${day.day}',
+                          style: TextStyle(
+                            fontSize: 18, // 날짜 글씨 크게
+                            fontWeight: FontWeight.bold,
+                            color: count > 0 ? Theme.of(context).colorScheme.primary : null,
+                          ),
+                        ),
+                      ),
+                      if (count > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              fontSize: 11, // 단어 개수는 작게
+                              color: Colors.blueAccent.withOpacity(0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      if (count == 0)
+                        const SizedBox(height: 15), // 단어 개수 없을 때도 높이 맞춤
+                    ],
                   ),
                 );
               },
@@ -1364,18 +1454,53 @@ class _HomePageState extends State<HomePage> {
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 350),
-                transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+                transitionBuilder: (child, anim) {
+                  // 슬라이드 방향 결정
+                  final isForward = currentIndex >= prevIndex;
+                  final beginOffset = isForward ? const Offset(1, 0) : const Offset(-1, 0);
+                  final endOffset = Offset.zero;
+                  return SlideTransition(
+                    position: anim.drive(Tween<Offset>(begin: beginOffset, end: endOffset).chain(CurveTween(curve: Curves.ease))),
+                    child: child,
+                  );
+                },
                 child: GestureDetector(
                   key: ValueKey('$showTodayWords-$currentIndex'),
-                  onHorizontalDragEnd: (details) {
-                    if (details.primaryVelocity == null) return;
-                    if (details.primaryVelocity! < 0) {
-                      if (currentIndex < list.length - 1) setState(() => currentIndex++);
-                    } else if (details.primaryVelocity! > 0) {
-                      if (currentIndex > 0) setState(() => currentIndex--);
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragUpdate: (details) {
+                    if (details.primaryDelta == null) return;
+                    final listLen = list.length;
+                    debugPrint('[DEBUG] 슬라이드 시도: list.length=$listLen, currentIndex=$currentIndex, primaryDelta=${details.primaryDelta}');
+                    if (listLen > 0) {
+                      debugPrint('[DEBUG] 현재 단어: ${list[currentIndex]}');
                     }
-                    revealedWordIndexes.clear();
-                    revealedMeaningIndexes.clear();
+                    if (details.primaryDelta! < -20) {
+                      debugPrint('[DEBUG] → 오른쪽(다음) 슬라이드 시도');
+                      if (currentIndex < listLen - 1) {
+                        setState(() {
+                          prevIndex = currentIndex;
+                          currentIndex++;
+                        });
+                        debugPrint('[DEBUG] → 다음 단어로 이동: newIndex=$currentIndex');
+                      } else {
+                        debugPrint('[DEBUG] → 마지막 단어, 이동 불가');
+                      }
+                      revealedWordIndexes.clear();
+                      revealedMeaningIndexes.clear();
+                    } else if (details.primaryDelta! > 20) {
+                      debugPrint('[DEBUG] ← 왼쪽(이전) 슬라이드 시도');
+                      if (currentIndex > 0) {
+                        setState(() {
+                          prevIndex = currentIndex;
+                          currentIndex--;
+                        });
+                        debugPrint('[DEBUG] ← 이전 단어로 이동: newIndex=$currentIndex');
+                      } else {
+                        debugPrint('[DEBUG] ← 첫 단어, 이동 불가');
+                      }
+                      revealedWordIndexes.clear();
+                      revealedMeaningIndexes.clear();
+                    }
                   },
                   child: _buildCard(word, partOfSpeech, meaning, currentIndex),
                 ),
@@ -1384,7 +1509,7 @@ class _HomePageState extends State<HomePage> {
             if (showTodayWords && list.length <= 1)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('오늘의 단어가 1개일 때는 스와이프가 제한됩니다.', style: TextStyle(color: Colors.grey)),
+                child: Text('오늘의 단어가 2개 이상일 때만 스와이프가 가능합니다.', style: TextStyle(color: Colors.grey)),
               ),
             if (showTodayWords)
               Padding(

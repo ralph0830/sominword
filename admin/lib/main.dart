@@ -737,6 +737,15 @@ class DeviceListPage extends StatelessWidget {
                             ),
                         ],
                       ),
+                      // 단어 개수 표시 (슈퍼관리자만)
+                      if (isSuperAdmin)
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance.collection('devices').doc(deviceId).collection('words').snapshots(),
+                          builder: (context, wordSnap) {
+                            final count = wordSnap.data?.docs.length ?? 0;
+                            return Text('단어: $count개', style: const TextStyle(color: Colors.deepPurple));
+                          },
+                        ),
                       if (lastActive != null)
                         Text('마지막 활동: ${_formatDate(lastActive.toDate())}'),
                     ],
