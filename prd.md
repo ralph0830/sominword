@@ -1,216 +1,76 @@
-좋습니다! 논의했던 내용을 바탕으로 개발에 필요한 모든 요소를 담은 PRD(Product Requirements Document).md 파일을 작성해 드릴게요. 이 문서는 개발팀이 앱의 기능과 목표를 명확히 이해하고 개발을 진행하는 데 도움이 될 것입니다.
-
-초등학교 영어 단어장 앱 (PRD.md)
-1. 개요 (Introduction)
-본 문서는 초등학교 저학년 학생들을 위한 모바일 영어 단어장 앱의 개발 요구사항을 정의합니다. 앱은 사용자가 영어 단어를 학습하고, 테스트하며, 복습하는 데 도움을 주는 것을 목표로 합니다. 관리자 페이지를 통해 단어를 손쉽게 추가/관리할 수 있으며, 이 단어들은 사용자 앱에 즉시 반영됩니다.
-
-2. 목표 (Goals)
-초등학생이 쉽고 재미있게 영어 단어를 학습하고 복습할 수 있는 환경 제공.
-
-관리자가 간편하게 매일 새로운 단어를 추가하고 관리할 수 있는 시스템 구축.
-
-다양한 학습 모드와 테스트 기능을 통해 효과적인 단어 암기 지원.
-
-TTS(Text-to-Speech) 기능을 통해 정확한 발음 학습 지원.
-
-3. 기능 요구사항 (Functional Requirements)
-3.1. 사용자 앱 (User Application)
-3.1.1. 단어 학습 메인 화면 (Card View)
-UI: 화면 중앙에 영어 단어가 크게 표시되고, 그 아래에 한글 품사와 한글 뜻이 표시되는 카드 형식.
-
-스와이프: 좌우 스와이프를 통해 다음/이전 단어로 이동.
-
-오른쪽 스와이프: 현재 단어보다 나중에 추가된 단어로 이동. (시간 순서상 다음)
-
-왼쪽 스와이프: 현재 단어보다 이전에 추가된 단어로 이동. (시간 순서상 이전)
-
-로직: 모든 단어는 입력된 날짜 및 시간(Timestamp) 기준으로 정렬되며, 스와이프는 이 순서를 따름.
-
-기본 로드: 앱 실행 시 가장 최근에 추가된 단어의 첫 번째 카드부터 로드하여 보여줌.
-
-발음 재생: 카드 내 스피커 아이콘 (🔊) 탭 시, 현재 표시된 영어 단어의 TTS 발음 재생.
-
-기술 스택: Flutter flutter_tts 패키지 활용.
-
-설정: 기본 발음 언어는 영어(미국식 또는 영국식)로 설정.
-
-즐겨찾기: 중요하거나 어려운 단어는 별표(★) 아이콘을 탭하여 즐겨찾기에 추가/해제 가능.
-
-3.1.2. 학습 모드 (TEST Mode)
-진입: 화면 상단에 4가지 모드를 전환할 수 있는 버튼 그룹 또는 드롭다운 메뉴 제공.
-
-모드 유형:
-
-일반 모드: 영어 단어, 한글 품사, 뜻 모두 표시. (기본 모드)
-
-뜻 가리기: 영어 단어만 표시되고 한글 품사와 뜻은 가려짐. 카드 탭 시 가려진 정보 노출.
-
-영단어 가리기: 한글 품사와 뜻만 표시되고 영어 단어는 가려짐. 카드 탭 시 가려진 정보 노출.
-
-랜덤 가리기: 영어 단어 또는 한글 뜻 중 무작위로 하나를 가림. 카드 탭 시 가려진 정보 노출.
-
-3.1.3. 캘린더를 통한 단어 이동
-진입: 메인 화면 상단 또는 별도 메뉴에 캘린더 아이콘 제공.
-
-UI: 월별 캘린더 UI 표시. 단어가 추가된 날짜에는 특별한 시각적 표시 (예: 점, 색상, 아이콘)를 통해 단어 존재 여부 알림.
-
-날짜 선택: 캘린더에서 특정 날짜를 탭하면, 해당 날짜에 추가된 가장 첫 번째 단어 카드로 메인 화면이 즉시 이동.
-
-스와이프 연동: 캘린더를 통해 이동한 후에도 좌우 스와이프를 통해 해당 날짜의 단어들과 이어지는 과거/미래 단어들을 계속 학습 가능.
-
-3.1.4. 오늘의 단어 모드 (Optional/Refinement)
-메인 화면 상단에 "오늘의 단어" 탭/버튼 제공.
-
-기능: 탭 시, 오늘 Admin 페이지에서 추가된 단어들만 순차적으로 표시.
-
-스와이프: "오늘의 단어" 내에서만 스와이프 가능하며, 오늘 단어가 끝나면 더 이상 스와이프되지 않거나, "모든 단어 보기"와 같은 옵션을 제공하여 전체 단어 모드로 전환 유도. (캘린더에서 오늘 날짜 선택 시와 동일하게 동작)
-
-3.2. 관리자 페이지 (Admin Page)
-구현 방식: Flutter Web 또는 별도 Admin 앱으로 구현 (Flutter Web 권장).
-
-단어 입력:
-
-입력 필드: 영어 단어, 품사(명사, 동사 등), 한글 뜻 입력 폼 제공.
-
-자동 Timestamp: 단어 저장 시, 자동으로 현재 날짜 및 시간(Timestamp) 정보를 DB에 함께 저장. (이 Timestamp가 앱에서 단어를 정렬하는 기준이 됨)
-
-저장 버튼: 입력된 정보를 Firebase에 저장하는 버튼.
-
-단어 목록 조회: 날짜별 또는 전체 단어 목록을 조회할 수 있는 기능.
-
-수정/삭제: 입력된 단어를 수정하거나 삭제할 수 있는 기능.
-
-4. 비기능 요구사항 (Non-Functional Requirements)
-4.1. 성능 (Performance)
-단어 로딩: 앱 실행 시 및 캘린더 이동 시 단어 데이터 로딩 속도 2초 이내.
-
-스와이프 반응성: 카드 스와이프 시 딜레이 없이 부드럽게 전환.
-
-TTS 반응성: 스피커 아이콘 탭 후 1초 이내에 발음 재생 시작.
-
-4.2. 사용성 (Usability)
-직관적인 UI: 초등학생이 쉽게 이해하고 사용할 수 있는 간결하고 직관적인 사용자 인터페이스.
-
-쉬운 내비게이션: 캘린더, 모드 전환 등 주요 기능에 쉽게 접근 가능한 내비게이션 구조.
-
-시각적 피드백: 버튼 탭, 스와이프 등 사용자 액션에 대한 명확한 시각적 피드백 제공.
-
-4.3. 안정성 (Reliability)
-데이터 일관성: Firebase와 앱 로컬 데이터 간의 일관성 유지. (Firebase Firestore의 오프라인 캐싱 기능 활용)
-
-오류 처리: 네트워크 연결 끊김, 데이터 로드 실패 등 예외 상황에 대한 사용자 친화적인 오류 메시지 및 처리.
-
-4.4. 보안 (Security)
-Firebase 보안 규칙: Firebase Firestore에 대한 읽기/쓰기 권한을 적절히 설정. (사용자 앱은 주로 읽기, Admin 페이지는 쓰기/읽기 권한)
-
-데이터 무결성: 단어 데이터 손상 방지 및 유효성 검사.
-
-4.5. 호환성 (Compatibility)
-모바일 OS: Android (최신 3버전 이상), iOS (최신 3버전 이상)
-
-화면 크기: 다양한 모바일 기기 화면 크기 및 해상도 지원.
-
-4.6. 유지보수성 (Maintainability)
-모듈화된 코드: 기능별로 모듈화된 코드 작성으로 유지보수 및 확장 용이성 확보.
-
-명확한 주석: 코드에 충분한 주석과 문서화.
-
-5. 기술 스택 (Technical Stack)
-프론트엔드 (사용자 앱 & Admin 페이지): Flutter (Dart 언어)
-
-백엔드/데이터베이스: Google Firebase Cloud Firestore
-
-데이터 모델: words 컬렉션 (Collection) 아래 각 단어별 문서 (Document)
-
-word_id (Document ID)
-
-english_word (String)
-
-korean_part_of_speech (String - 명사, 동사 등)
-
-korean_meaning (String)
-
-input_timestamp (Timestamp - FieldValue.serverTimestamp() 사용 권장)
-
-is_favorite (Boolean - 사용자 앱에서 로컬 관리)
-
-TTS (Text-to-Speech): Flutter flutter_tts 패키지
-
-로컬 캐싱: Firebase Firestore의 오프라인 캐싱 기능 활용. (별도 로컬 DB 라이브러리 sqflite 또는 hive는 필요 없으나, 즐겨찾기 등 사용자별 데이터는 로컬 DB로 관리 고려)
-
-6. 개발 로드맵 (High-Level Development Roadmap)
-환경 설정: Flutter, Firebase 프로젝트 설정 및 연동.
-
-Firebase 데이터 모델링: Firestore 컬렉션 및 문서 구조 정의.
-
-Admin 페이지 개발: 단어 입력, 조회, 수정, 삭제 기능 구현 (Firebase 연동).
-
-사용자 앱 UI 기본 구조: 스플래시, 메인 화면(카드 뷰) 레이아웃, 스와이프 기능.
-
-Firebase 데이터 연동: 앱에서 Firebase 데이터 읽기 및 표시.
-
-TTS 발음 기능 구현: flutter_tts 연동 및 스피커 아이콘 동작.
-
-학습 모드 구현: 4가지 TEST 모드 전환 로직 및 UI.
-
-캘린더 기능 구현: table_calendar 등 활용하여 날짜 선택 및 단어 이동.
-
-즐겨찾기 기능 구현: (선택 사항: 로컬 DB 또는 사용자 인증 후 Firebase 연동)
-
-테스트 및 디버깅: 기능 테스트, 성능 최적화, 버그 수정.
-
-배포 준비: 앱 아이콘, 스플래시 이미지, 스토어 정보 준비.
-
-앱 배포: Google Play Store, Apple App Store 배포.
-
-7. 향후 고려사항 (Future Considerations)
-사용자별 학습 진도 저장 (Firebase User Authentication 및 Firestore 활용).
-
-간단한 단어 게임 추가 (스펠링 퀴즈, 짝 맞추기 등).
-
-예문 추가 및 예문 발음 기능.
-
-사진 또는 이미지 자료 연동.
-
-8. 진행 현황 및 이슈 (Progress & Issues)
-
-- 2025년 7월 기준, 아래와 같이 개발이 진행됨
-
-### [완료된 주요 작업]
-- Flutter 3.32.5 및 Dart 3.8.1 환경에서 개발 환경 구축 (WSL2 + Ubuntu 22.04)
-- WSL2 환경에서 Windows Chrome 및 Linux Chrome 연동 설정, Flutter Web 정상 실행
-- Firebase 연동 및 Firestore 데이터 모델 설계/구현
-- 관리자 페이지(Flutter Web) 개발 및 서버 실행, 단어 CRUD, UI/UX 구현
-- 사용자 앱 주요 기능(카드 뷰, 스와이프, TTS, 즐겨찾기, 학습 모드, 캘린더, 오늘의 단어 등) 구현 완료
-- git을 통한 형상 관리 및 원격 저장소(GitHub) 동기화
-
-### [남은 과제 및 향후 계획]
-- 주요 기능별 단위/통합 테스트 작성 및 실제 기기/에뮬레이터 테스트
+# sominword (최신 PRD)
+
+## 1. 개요 (Introduction)
+본 프로젝트는 초등학교 저학년 학생을 위한 영어 단어장 앱입니다. **사용자 앱(모바일)**과 **관리자 페이지(Flutter Web)**로 완전히 분리되어 있으며, Firebase를 통해 실시간 데이터 연동 및 관리가 가능합니다.
+
+- **사용자 앱**: 학생이 단어를 학습, 복습, 테스트할 수 있는 모바일 앱 (Android/iOS)
+- **관리자 페이지**: 관리자가 단어를 추가/수정/삭제, 기기 승인, 관리자 권한 관리 등을 수행하는 웹 앱 (Flutter Web)
+
+## 2. 목표 (Goals)
+- 초등학생이 쉽고 재미있게 영어 단어를 학습/복습할 수 있는 환경 제공
+- 관리자가 간편하게 단어를 추가/관리하고, 기기 및 관리자 권한을 효율적으로 관리
+- 다양한 학습 모드, TTS, 즐겨찾기, 캘린더 등 풍부한 학습 지원 기능 제공
+
+## 3. 프로젝트 구조
+- **lib/**: 사용자 앱(모바일) 소스
+- **admin/**: 관리자 페이지(Flutter Web) 소스
+- **공통**: Firebase 프로젝트, Firestore, Storage, Auth 등
+
+## 4. 주요 기능 및 정책
+### 4.1 사용자 앱(모바일)
+- 카드 뷰 기반 단어 학습, 좌우 스와이프로 단어 이동
+- TTS(발음) 기능, 즐겨찾기(로컬 DB)
+- 4가지 학습 모드(일반/뜻 가리기/영단어 가리기/랜덤)
+- 캘린더로 날짜별 단어 이동, 오늘의 단어 모드
+- **기기 등록/승인 정책**: 최초 실행 시 기기 고유번호(deviceId) 생성 및 Firestore 등록, 관리자가 승인해야 앱 사용 가능
+
+### 4.2 관리자 페이지(Flutter Web)
+- Firebase Auth 기반 이메일/비밀번호 로그인
+- 관리자 계정은 Firestore `account` 컬렉션에 이메일을 문서 ID로 사용
+- `isSuperAdmin`, `isApproved` 필드로 권한/승인 관리, 슈퍼관리자만 신규 관리자 승인 가능
+- 단어 CRUD, 기기 승인/거부, 관리자 신청/승인, 기기별 단어 관리 등 모든 기능 구현
+
+## 5. Firestore 데이터 구조 (최신)
+- **words 컬렉션**
+  - 문서ID: 자동
+  - 필드: english_word, korean_part_of_speech, korean_meaning, input_timestamp, device_id
+- **account 컬렉션**
+  - 문서ID: 이메일
+  - 필드: email, uid, isSuperAdmin, isApproved, requestedAt, approvedAt, approvedBy
+- **devices 컬렉션**
+  - 문서ID: device_id
+  - 필드: device_id, device_name, owner_email, registered_at, is_approved
+
+## 6. 기술 스택 및 환경
+- Flutter 3.32.5, Dart 3.8.1
+- Firebase Core/Firestore/Auth/Storage
+- 주요 패키지: flutter_tts, table_calendar, hive, device_info_plus 등
+- 개발환경: WSL2(Ubuntu 22.04) + VSCode + Chrome(Linux/Windows)
+
+## 7. 완료/진행/향후 과제 (2025년 7월 기준)
+### [완료]
+- 관리자 페이지/사용자 앱 모든 주요 기능 구현
+- Firestore 구조, 기기 승인, TTS, 학습 모드, 캘린더, 즐겨찾기, 보안 정책 등
+- git 형상 관리, systemd 서비스로 관리자 페이지 자동 실행
+
+### [진행/향후]
+- 주요 기능별 단위/통합 테스트, 실제 기기/에뮬레이터 테스트
 - 앱 아이콘/스플래시 이미지 제작, QA 및 버그 수정, 최종 배포 준비
 - Google Play Store/Apple App Store 등록
-- 사용자별 학습 진도 저장, 단어 게임, 예문/이미지 자료 등 확장 기능 검토
+- 사용자별 학습 진도 저장, 단어 게임, 예문/이미지 자료 등 확장 기능
 
-### [환경 특이사항 및 참고]
-- 개발 환경: WSL2(Ubuntu 22.04) + Flutter Web + Chrome(Linux/Windows)
-- git 커밋/푸시 및 원격 저장소 관리 완료
-- systemd 서비스 파일로 관리자 페이지 서버 자동 실행 가능
-- ADB, 포트, 방화벽 등 환경 이슈 해결 경험 있음
+## 8. 기기 고유값(디바이스 ID) 정책
+- Android: device_info_plus의 androidInfo.id (Settings.Secure.ANDROID_ID)
+- iOS: device_info_plus의 iosInfo.identifierForVendor
+- 기타: 최초 실행 시 UUID 생성 후 SharedPreferences에 저장
+- Firestore, 관리자 페이지, 사용자 앱 등 모든 경로에서 위 정책에 따라 생성된 deviceId만 사용
+- 앱 내에서 deviceId를 사용자에게 안내(복사/백업 등 UX 제공)
 
-## [기기 고유값(디바이스 ID) 정책 및 일관성]
+## 9. 참고 및 기타
+- 모든 소스는 Dart 공식 스타일 가이드 및 Flutter 프로젝트 규칙을 준수
+- deprecated API 사용 금지, 코드 품질 및 보안 정책 엄수
+- 확장성/유지보수성을 고려한 모듈화 및 주석 작성
 
-- **기기 고유값(디바이스 ID) 생성 및 사용 정책**
-    - Android: device_info_plus 패키지의 `androidInfo.id` 값을 사용 (Settings.Secure.ANDROID_ID 기반)
-    - iOS: device_info_plus 패키지의 `iosInfo.identifierForVendor` 값을 사용
-    - 기타 플랫폼: 최초 실행 시 UUID를 생성하여 SharedPreferences에 저장 후 사용
-    - 최초 실행 시 위 값을 SharedPreferences에 저장하고, 이후에는 항상 이 값을 사용하여 Firestore 등 모든 데이터 연동에 일관성 유지
+---
 
-- **앱 삭제/재설치 시 정책 및 한계**
-    - Android: ANDROID_ID는 앱 삭제 후 재설치 시 변경될 수 있음(플랫폼 정책)
-    - iOS: identifierForVendor는 동일 벤더의 앱이 모두 삭제되면 값이 변경될 수 있음
-    - 즉, 앱 삭제 후 재설치 시에는 기기 고유값이 바뀌는 것이 정상이며, 이는 모바일 OS 정책상 불가피함
-    - 앱을 삭제하지 않는 한, 어느 컴퓨터에서 빌드/설치/디버깅해도 동일 기기는 항상 같은 deviceId로 관리됨
-
-- **일관성 유지 방안**
-    - Firestore, 관리자 페이지, 사용자 앱 등 모든 경로에서 반드시 위 정책에 따라 생성된 deviceId만 사용
-    - deviceId 생성/사용 로직은 DeviceIdService에서만 관리하며, 프로젝트 전체에서 일관성 보장
-    - 앱 내에서 deviceId를 사용자에게 명확히 안내(복사/백업 등)하여, 필요시 수동 복구도 가능하도록 UX 제공
+(이 문서는 실제 코드/구조/정책을 반영하여 최신화되었습니다. 세부 구현 및 정책 변경 시 본 문서도 함께 업데이트할 것!)
