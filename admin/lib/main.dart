@@ -1276,6 +1276,7 @@ class DeviceListPage extends StatelessWidget {
 
               if (!deviceDoc.exists) {
                 debugPrint('[DEBUG] 입력된 deviceId가 Firestore에 존재하지 않음.');
+                if (!ctx.mounted) return;
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(content: Text('등록된 고유 번호가 아닙니다. 앱을 기기에서 최소 1회 실행해주세요.')),
                 );
@@ -1283,10 +1284,11 @@ class DeviceListPage extends StatelessWidget {
               }
 
               final data = deviceDoc.data();
-              debugPrint('[DEBUG] Firestore에서 조회된 device 데이터: ' + data.toString());
+              debugPrint('[DEBUG] Firestore에서 조회된 device 데이터: ${data.toString()}');
 
               if (data?['ownerEmail'] != null && (data?['ownerEmail'] as String).isNotEmpty) {
                 debugPrint('[DEBUG] 이미 ownerEmail이 존재함: ${data?['ownerEmail']}');
+                if (!ctx.mounted) return;
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(content: Text('이미 등록된 번호입니다.')),
                 );
@@ -1303,12 +1305,11 @@ class DeviceListPage extends StatelessWidget {
                 'requestedAt': FieldValue.serverTimestamp(),
               });
               debugPrint('[DEBUG] pendingDevices에 신청 완료: deviceId=$deviceId, deviceName=$deviceName, ownerEmail=$email');
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('기기 추가 신청이 완료되었습니다. 슈퍼 관리자의 승인을 기다려주세요.')),
-                );
-              }
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(content: Text('기기 추가 신청이 완료되었습니다. 슈퍼 관리자의 승인을 기다려주세요.')),
+              );
             },
             child: const Text('신청'),
           ),

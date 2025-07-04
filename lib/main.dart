@@ -9,6 +9,163 @@ import 'firebase_options.dart';
 import 'services/device_id_service.dart';
 import 'services/firebase_service.dart';
 
+// 카드 UI 분리: WordCard 위젯(최상위 레벨)
+class WordCard extends StatelessWidget {
+  final String word;
+  final String partOfSpeech;
+  final String meaning;
+  final int idx;
+  final bool isSpeaking;
+  final bool isFavorite;
+  final bool hideWord;
+  final bool hideMeaning;
+  final bool revealedWord;
+  final bool revealedMeaning;
+  final VoidCallback onSpeak;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onRevealWord;
+  final VoidCallback onRevealMeaning;
+
+  const WordCard({
+    super.key,
+    required this.word,
+    required this.partOfSpeech,
+    required this.meaning,
+    required this.idx,
+    required this.isSpeaking,
+    required this.isFavorite,
+    required this.hideWord,
+    required this.hideMeaning,
+    required this.revealedWord,
+    required this.revealedMeaning,
+    required this.onSpeak,
+    required this.onToggleFavorite,
+    required this.onRevealWord,
+    required this.onRevealMeaning,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      transitionBuilder: (child, anim) {
+        // 항상 오른쪽에서 왼쪽으로 슬라이드
+        final beginOffset = const Offset(1, 0);
+        final endOffset = Offset.zero;
+        return SlideTransition(
+          position: anim.drive(Tween<Offset>(begin: beginOffset, end: endOffset).chain(CurveTween(curve: Curves.ease))),
+          child: child,
+        );
+      },
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      child: _buildFront(context),
+    );
+  }
+
+  Widget _buildFront(BuildContext context) {
+    return Container(
+      key: const ValueKey(false),
+      child: Stack(
+        children: [
+          Card(
+            elevation: 8,
+            margin: const EdgeInsets.all(0),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            color: Colors.white,
+            child: Container(
+              width: 320,
+              height: 420,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  // 상단 아이콘 Row (TTS, 별)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // TTS(발음) 아이콘
+                      IconButton(
+                        icon: Icon(isSpeaking ? Icons.volume_off : Icons.volume_up, color: Colors.deepPurple),
+                        onPressed: isSpeaking ? null : onSpeak,
+                        tooltip: isSpeaking ? '발음 중...' : '발음 듣기',
+                      ),
+                      // 즐겨찾기(별) 아이콘
+                      GestureDetector(
+                        onTap: onToggleFavorite,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurple[50],
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            isFavorite ? Icons.star : Icons.star_border,
+                            color: isFavorite ? Colors.amber : Colors.deepPurple[200],
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  // 영어단어(중앙)
+                  Text(
+                    word,
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ) ?? const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  // 품사(라벨)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple[50],
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      partOfSpeech,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Colors.deepPurple,
+                            fontWeight: FontWeight.w600,
+                          ) ?? const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // 한글 뜻
+                  Text(
+                    meaning,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Colors.black87,
+                        ) ?? const TextStyle(fontSize: 20, color: Colors.black87),
+                    textAlign: TextAlign.center,
+                  ),
+                  const Spacer(),
+                  // 플립 안내 아이콘
+                  Opacity(
+                    opacity: 0.25,
+                    child: Column(
+                      children: [
+                        Icon(Icons.swipe, size: 40),
+                        const SizedBox(height: 4),
+                        Text('카드를 탭하거나 스와이프하세요', style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -298,8 +455,6 @@ class _DeviceIdView extends StatelessWidget {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -469,6 +624,7 @@ class _HomePageState extends State<HomePage> {
   int titleClickCount = 0;
   String? deviceId;
   int deviceStatus = 0; // 0: 미등록, 1: 승인대기, 2: 정상
+  int _selectedTab = 0; // 0: 단어장, 1: Quiz, 2: 즐겨찾기
 
   @override
   void initState() {
@@ -776,65 +932,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {});
   }
 
-  void _showFavoritesDialog() {
-    final favoriteWords = words
-        .where((w) => isFavoriteWord(w['word'] as String? ?? ''))
-        .toList();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('즐겨찾기 단어'),
-        content: SizedBox(
-          width: 300,
-          child: favoriteWords.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.star_border,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '즐겨찾기한 단어가 없습니다.',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: favoriteWords.length,
-                  itemBuilder: (context, idx) {
-                    final w = favoriteWords[idx];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        leading: const Icon(Icons.star, color: Colors.amber),
-                        title: Text(
-                          w['word'] ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text('${w['partOfSpeech']} / ${w['meaning']}'),
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('닫기'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void revealWord(int idx) {
     setState(() {
       revealedWordIndexes.add(idx);
@@ -1025,129 +1122,133 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCard(String word, String partOfSpeech, String meaning, int idx) {
-    bool hideWord = false;
-    bool hideMeaning = false;
-    if (mode == StudyMode.hideMeaning) {
-      hideMeaning = true;
-    } else if (mode == StudyMode.hideWord) {
-      hideWord = true;
-    } else if (mode == StudyMode.randomHide) {
-      final hide = (DateTime.now().millisecondsSinceEpoch % 2 == 0);
-      if (hide) {
-        hideWord = true;
-      } else {
-        hideMeaning = true;
-      }
-    }
-    
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        width: 320,
-        padding: const EdgeInsets.all(24),
-        child: Column(
+  // 단어 추가 다이얼로그
+  void _showAddWordDialog() {
+    final engController = TextEditingController();
+    final posController = TextEditingController();
+    final korController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('단어 추가'),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton.filledTonal(
-                  icon: Icon(isSpeaking ? Icons.volume_off : Icons.volume_up),
-                  onPressed: isSpeaking ? null : () => _speak(word),
-                  tooltip: isSpeaking ? '발음 중...' : '발음 듣기',
-                ),
-                IconButton.filledTonal(
-                  icon: Icon(isFavoriteWord(word) ? Icons.star : Icons.star_border),
-                  onPressed: () => toggleFavorite(word),
-                  tooltip: '즐겨찾기',
-                  style: IconButton.styleFrom(
-                    foregroundColor: isFavoriteWord(word) ? Colors.amber : null,
-                  ),
-                ),
-              ],
+            TextField(
+              controller: engController,
+              decoration: const InputDecoration(labelText: '영어 단어'),
             ),
-            const SizedBox(height: 20),
-            hideWord && !revealedWordIndexes.contains(idx)
-                ? GestureDetector(
-                    onTap: () => revealWord(idx),
-                    child: Container(
-                      width: double.infinity,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '영단어 가림',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  )
-                : Semantics(
-                    label: '영어 단어: $word',
-                    child: Text(
-                      word,
-                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                partOfSpeech,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: posController,
+              decoration: const InputDecoration(labelText: '품사'),
             ),
-            const SizedBox(height: 16),
-            hideMeaning && !revealedMeaningIndexes.contains(idx)
-                ? GestureDetector(
-                    onTap: () => revealMeaning(idx),
-                    child: Container(
-                      width: double.infinity,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '뜻 가림',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  )
-                : Semantics(
-                    label: '한글 뜻: $meaning',
-                    child: Text(
-                      meaning,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: korController,
+              decoration: const InputDecoration(labelText: '한글 뜻'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final eng = engController.text.trim();
+              final pos = posController.text.trim();
+              final kor = korController.text.trim();
+              if (eng.isEmpty || pos.isEmpty || kor.isEmpty) return;
+              await FirebaseService().addWord(
+                englishWord: eng,
+                koreanPartOfSpeech: pos,
+                koreanMeaning: kor,
+              );
+              if (!ctx.mounted) return;
+              await _fetchWords();
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(content: Text('단어가 추가되었습니다.')),
+              );
+            },
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 필터/정렬 다이얼로그
+  void _showFilterDialog() {
+    String? selectedPos;
+    String? selectedSort = '최신순';
+    final posList = words.map((w) => w['partOfSpeech'] as String? ?? '').toSet().toList();
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('필터/정렬'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButton<String>(
+                value: selectedPos,
+                hint: const Text('품사별 필터'),
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('전체')),
+                  ...posList.map((pos) => DropdownMenuItem(value: pos, child: Text(pos))),
+                ],
+                onChanged: (val) => setState(() => selectedPos = val),
+              ),
+              const SizedBox(height: 12),
+              DropdownButton<String>(
+                value: selectedSort,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: '최신순', child: Text('최신순')),
+                  DropdownMenuItem(value: '오래된순', child: Text('오래된순')),
+                  DropdownMenuItem(value: '가나다순', child: Text('가나다순')),
+                ],
+                onChanged: (val) => setState(() => selectedSort = val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('닫기'),
+            ),
+            FilledButton(
+              onPressed: () {
+                // 필터/정렬 적용 로직 (예시: setState로 words 리스트 재정렬/필터)
+                List<Map<String, dynamic>> filtered = [...words];
+                final pos = selectedPos;
+                if (pos != null && pos.isNotEmpty) {
+                  filtered = filtered.where((w) => w['partOfSpeech'] == pos).toList();
+                }
+                if (selectedSort == '최신순') {
+                  filtered.sort((a, b) => (b['input_timestamp'] as Timestamp).compareTo(a['input_timestamp'] as Timestamp));
+                } else if (selectedSort == '오래된순') {
+                  filtered.sort((a, b) => (a['input_timestamp'] as Timestamp).compareTo(b['input_timestamp'] as Timestamp));
+                } else if (selectedSort == '가나다순') {
+                  filtered.sort((a, b) => (a['word'] as String).compareTo(b['word'] as String));
+                }
+                setState(() {
+                  if (showTodayWords) {
+                    todayWords = filtered;
+                  } else {
+                    words = filtered;
+                  }
+                  currentIndex = 0;
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text('적용'),
+            ),
           ],
         ),
       ),
@@ -1358,6 +1459,16 @@ class _HomePageState extends State<HomePage> {
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _showAddWordDialog,
+            tooltip: '단어 추가',
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _showFilterDialog,
+            tooltip: '필터/정렬',
+          ),
           PopupMenuButton<StudyMode>(
             icon: const Icon(Icons.menu_book),
             tooltip: '학습 모드',
@@ -1368,41 +1479,25 @@ class _HomePageState extends State<HomePage> {
               const PopupMenuItem(
                 value: StudyMode.normal,
                 child: Row(
-                  children: [
-                    Icon(Icons.visibility),
-                    SizedBox(width: 8),
-                    Text('일반 모드'),
-                  ],
+                  children: [Icon(Icons.visibility), SizedBox(width: 8), Text('일반 모드')],
                 ),
               ),
               const PopupMenuItem(
                 value: StudyMode.hideMeaning,
                 child: Row(
-                  children: [
-                    Icon(Icons.visibility_off),
-                    SizedBox(width: 8),
-                    Text('뜻 가리기'),
-                  ],
+                  children: [Icon(Icons.visibility_off), SizedBox(width: 8), Text('뜻 가리기')],
                 ),
               ),
               const PopupMenuItem(
                 value: StudyMode.hideWord,
                 child: Row(
-                  children: [
-                    Icon(Icons.visibility_off),
-                    SizedBox(width: 8),
-                    Text('영단어 가리기'),
-                  ],
+                  children: [Icon(Icons.visibility_off), SizedBox(width: 8), Text('영단어 가리기')],
                 ),
               ),
               const PopupMenuItem(
                 value: StudyMode.randomHide,
                 child: Row(
-                  children: [
-                    Icon(Icons.shuffle),
-                    SizedBox(width: 8),
-                    Text('랜덤 가리기'),
-                  ],
+                  children: [Icon(Icons.shuffle), SizedBox(width: 8), Text('랜덤 가리기')],
                 ),
               ),
             ],
@@ -1410,12 +1505,7 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: const Icon(Icons.calendar_today),
             onPressed: _showCalendarDialog,
-            tooltip: '캘린더',
-          ),
-          IconButton(
-            icon: const Icon(Icons.star),
-            onPressed: _showFavoritesDialog,
-            tooltip: '즐겨찾기 목록',
+            tooltip: '달력',
           ),
           IconButton(
             icon: Icon(showTodayWords ? Icons.list : Icons.today),
@@ -1423,13 +1513,36 @@ class _HomePageState extends State<HomePage> {
             tooltip: showTodayWords ? '전체 단어 보기' : '오늘의 단어',
           ),
         ],
-        bottom: isOffline
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(32),
-                child: Container(
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(32),
+          child: Column(
+            children: [
+              // 진행률 ProgressBar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: LinearProgressIndicator(
+                        value: list.isNotEmpty ? (currentIndex + 1) / list.length : 0,
+                        backgroundColor: Colors.white24,
+                        color: Theme.of(context).colorScheme.secondary,
+                        minHeight: 8,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      list.isNotEmpty ? '${currentIndex + 1}/${list.length}' : '0/0',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              if (isOffline)
+                Container(
                   color: Colors.orange,
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1437,90 +1550,156 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(width: 8),
                       Text(
                         '오프라인 모드: 캐시 데이터로 표시 중',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white,
-                        ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
                       ),
                     ],
                   ),
                 ),
-              )
-            : null,
+            ],
+          ),
+        ),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Expanded(
+      body: _selectedTab == 0
+          ? Align(
+              alignment: const Alignment(0, -0.4),
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
+                duration: const Duration(milliseconds: 400),
                 transitionBuilder: (child, anim) {
-                  // 슬라이드 방향 결정
-                  final isForward = currentIndex >= prevIndex;
-                  final beginOffset = isForward ? const Offset(1, 0) : const Offset(-1, 0);
+                  final beginOffset = const Offset(1, 0);
                   final endOffset = Offset.zero;
                   return SlideTransition(
                     position: anim.drive(Tween<Offset>(begin: beginOffset, end: endOffset).chain(CurveTween(curve: Curves.ease))),
                     child: child,
                   );
                 },
+                switchInCurve: Curves.easeInOut,
+                switchOutCurve: Curves.easeInOut,
                 child: GestureDetector(
                   key: ValueKey('$showTodayWords-$currentIndex'),
                   behavior: HitTestBehavior.opaque,
                   onHorizontalDragUpdate: (details) {
                     if (details.primaryDelta == null) return;
                     final listLen = list.length;
-                    debugPrint('[DEBUG] 슬라이드 시도: list.length=$listLen, currentIndex=$currentIndex, primaryDelta=${details.primaryDelta}');
-                    if (listLen > 0) {
-                      debugPrint('[DEBUG] 현재 단어: ${list[currentIndex]}');
-                    }
                     if (details.primaryDelta! < -20) {
-                      debugPrint('[DEBUG] → 오른쪽(다음) 슬라이드 시도');
                       if (currentIndex < listLen - 1) {
                         setState(() {
                           prevIndex = currentIndex;
                           currentIndex++;
                         });
-                        debugPrint('[DEBUG] → 다음 단어로 이동: newIndex=$currentIndex');
-                      } else {
-                        debugPrint('[DEBUG] → 마지막 단어, 이동 불가');
                       }
                       revealedWordIndexes.clear();
                       revealedMeaningIndexes.clear();
                     } else if (details.primaryDelta! > 20) {
-                      debugPrint('[DEBUG] ← 왼쪽(이전) 슬라이드 시도');
                       if (currentIndex > 0) {
                         setState(() {
                           prevIndex = currentIndex;
                           currentIndex--;
                         });
-                        debugPrint('[DEBUG] ← 이전 단어로 이동: newIndex=$currentIndex');
-                      } else {
-                        debugPrint('[DEBUG] ← 첫 단어, 이동 불가');
                       }
                       revealedWordIndexes.clear();
                       revealedMeaningIndexes.clear();
                     }
                   },
-                  child: _buildCard(word, partOfSpeech, meaning, currentIndex),
+                  child: WordCard(
+                    word: word,
+                    partOfSpeech: partOfSpeech,
+                    meaning: meaning,
+                    idx: currentIndex,
+                    isSpeaking: isSpeaking,
+                    isFavorite: isFavoriteWord(word),
+                    hideWord: mode == StudyMode.hideWord,
+                    hideMeaning: mode == StudyMode.hideMeaning,
+                    revealedWord: revealedWordIndexes.contains(currentIndex),
+                    revealedMeaning: revealedMeaningIndexes.contains(currentIndex),
+                    onSpeak: () => _speak(word),
+                    onToggleFavorite: () => toggleFavorite(word),
+                    onRevealWord: () => revealWord(currentIndex),
+                    onRevealMeaning: () => revealMeaning(currentIndex),
+                  ),
                 ),
               ),
+            )
+          : _selectedTab == 1
+              ? Center(child: Text('Quiz 화면 (추후 구현)', style: TextStyle(fontSize: 20)))
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 24),
+                      Text('즐겨찾기 단어', style: Theme.of(context).textTheme.headlineMedium),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            final favoriteWords = words
+                                .where((w) => isFavoriteWord(w['word'] as String? ?? ''))
+                                .toList();
+                            if (favoriteWords.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.star_border, size: 48, color: Theme.of(context).colorScheme.outline),
+                                    const SizedBox(height: 16),
+                                    Text('즐겨찾기한 단어가 없습니다.',
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            return ListView.builder(
+                              itemCount: favoriteWords.length,
+                              itemBuilder: (context, idx) {
+                                final w = favoriteWords[idx];
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  child: ListTile(
+                                    leading: const Icon(Icons.star, color: Colors.amber),
+                                    title: Text(
+                                      w['word'] ?? '',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    subtitle: Text('${w['partOfSpeech']} / ${w['meaning']}'),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+      bottomNavigationBar: SafeArea(
+        child: BottomNavigationBar(
+          currentIndex: _selectedTab,
+          onTap: (idx) {
+            setState(() {
+              _selectedTab = idx;
+            });
+          },
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view),
+              label: '단어장',
             ),
-            if (showTodayWords && list.length <= 1)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('오늘의 단어가 2개 이상일 때만 스와이프가 가능합니다.', style: TextStyle(color: Colors.grey)),
-              ),
-            if (showTodayWords)
-              SafeArea(
-                minimum: const EdgeInsets.only(bottom: 24),
-                child: FilledButton.icon(
-                  icon: const Icon(Icons.list),
-                  label: const Text('전체 단어로 돌아가기'),
-                  onPressed: _toggleTodayWords,
-                ),
-              ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.quiz),
+              label: 'Quiz',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.star),
+              label: '즐겨찾기',
+            ),
           ],
+          selectedItemColor: Colors.deepPurple,
+          unselectedItemColor: Colors.grey,
+          backgroundColor: Colors.white,
+          type: BottomNavigationBarType.fixed,
         ),
       ),
     );
