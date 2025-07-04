@@ -910,7 +910,7 @@ class _HomePageState extends State<HomePage> {
                             '$count',
                             style: TextStyle(
                               fontSize: 11, // 단어 개수는 작게
-                              color: Colors.blueAccent.withOpacity(0.7),
+                              color: Colors.blueAccent.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -950,7 +950,7 @@ class _HomePageState extends State<HomePage> {
                             '$count',
                             style: TextStyle(
                               fontSize: 11, // 단어 개수는 작게
-                              color: Colors.blueAccent.withOpacity(0.7),
+                              color: Colors.blueAccent.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -990,7 +990,7 @@ class _HomePageState extends State<HomePage> {
                             '$count',
                             style: TextStyle(
                               fontSize: 11, // 단어 개수는 작게
-                              color: Colors.blueAccent.withOpacity(0.7),
+                              color: Colors.blueAccent.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1512,8 +1512,8 @@ class _HomePageState extends State<HomePage> {
                 child: Text('오늘의 단어가 2개 이상일 때만 스와이프가 가능합니다.', style: TextStyle(color: Colors.grey)),
               ),
             if (showTodayWords)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 24),
+              SafeArea(
+                minimum: const EdgeInsets.only(bottom: 24),
                 child: FilledButton.icon(
                   icon: const Icon(Icons.list),
                   label: const Text('전체 단어로 돌아가기'),
