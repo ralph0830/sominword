@@ -16,5 +16,6 @@
   "googlecloudtools.firebase-dataconnect-vscode.enabled": false,
   "firebase.dataconnect.enabled": false,
   "firebase.dataconnect.showInExplorer": false,
-  "firebase.dataconnect.showInCommandPalette": false
+  "firebase.dataconnect.showInCommandPalette": false,
+
 } 

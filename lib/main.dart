@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'firebase_options.dart';
 import 'services/device_id_service.dart';
 import 'services/firebase_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // 카드 UI 분리: WordCard 위젯(최상위 레벨)
 class WordCard extends StatelessWidget {
@@ -25,6 +26,7 @@ class WordCard extends StatelessWidget {
   final VoidCallback onToggleFavorite;
   final VoidCallback onRevealWord;
   final VoidCallback onRevealMeaning;
+  final bool showHint;
 
   const WordCard({
     super.key,
@@ -42,14 +44,18 @@ class WordCard extends StatelessWidget {
     required this.onToggleFavorite,
     required this.onRevealWord,
     required this.onRevealMeaning,
+    required this.showHint,
   });
 
   @override
   Widget build(BuildContext context) {
+    // randomHide 모드일 때만 idx 분기 적용
+    final bool isRandom = hideWord && hideMeaning;
+    final bool shouldHideWord = isRandom ? idx % 2 == 0 : hideWord;
+    final bool shouldHideMeaning = isRandom ? idx % 2 == 1 : hideMeaning;
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 400),
       transitionBuilder: (child, anim) {
-        // 항상 오른쪽에서 왼쪽으로 슬라이드
         final beginOffset = const Offset(1, 0);
         final endOffset = Offset.zero;
         return SlideTransition(
@@ -59,11 +65,15 @@ class WordCard extends StatelessWidget {
       },
       switchInCurve: Curves.easeInOut,
       switchOutCurve: Curves.easeInOut,
-      child: _buildFront(context),
+      child: _buildFront(context, shouldHideWord, shouldHideMeaning),
     );
   }
 
-  Widget _buildFront(BuildContext context) {
+  Widget _buildFront(BuildContext context, bool shouldHideWord, bool shouldHideMeaning) {
+    final cardWidth = 320.0; // 카드 width 고정값(혹은 Container width 사용)
+    final wordFontSize = cardWidth * 0.15; // 15%
+    final meaningFontSize = cardWidth * 0.09; // 9%
+    final posFontSize = cardWidth * 0.06; // 6%
     return Container(
       key: const ValueKey(false),
       child: Stack(
@@ -74,7 +84,7 @@ class WordCard extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
             color: Colors.white,
             child: Container(
-              width: 320,
+              width: cardWidth,
               height: 420,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: Column(
@@ -110,14 +120,39 @@ class WordCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   // 영어단어(중앙)
-                  Text(
-                    word,
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ) ?? const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
+                  shouldHideWord && !revealedWord
+                      ? GestureDetector(
+                          onTap: onRevealWord,
+                          child: Center(
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: wordFontSize * 1.15, // 텍스트 높이와 유사하게
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Text(
+                              word,
+                              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                    fontSize: wordFontSize,
+                                    fontFamily: Theme.of(context).textTheme.displaySmall?.fontFamily,
+                                  ) ?? TextStyle(fontSize: wordFontSize, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
                   const SizedBox(height: 32),
                   // 품사(라벨)
                   Container(
@@ -131,31 +166,58 @@ class WordCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: Colors.deepPurple,
                             fontWeight: FontWeight.w600,
-                          ) ?? const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.w600),
+                            fontSize: posFontSize,
+                          ) ?? TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.w600, fontSize: posFontSize),
                     ),
                   ),
                   const SizedBox(height: 16),
                   // 한글 뜻
-                  Text(
-                    meaning,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.black87,
-                        ) ?? const TextStyle(fontSize: 20, color: Colors.black87),
-                    textAlign: TextAlign.center,
-                  ),
+                  shouldHideMeaning && !revealedMeaning
+                      ? GestureDetector(
+                          onTap: onRevealMeaning,
+                          child: Center(
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: meaningFontSize * 1.15,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Text(
+                              meaning,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.black87,
+                                    fontSize: meaningFontSize,
+                                    fontFamily: Theme.of(context).textTheme.titleLarge?.fontFamily,
+                                  ) ?? TextStyle(fontSize: meaningFontSize, color: Colors.black87),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
                   const Spacer(),
-                  // 플립 안내 아이콘
-                  Opacity(
-                    opacity: 0.25,
-                    child: Column(
-                      children: [
-                        Icon(Icons.swipe, size: 40),
-                        const SizedBox(height: 4),
-                        Text('카드를 탭하거나 스와이프하세요', style: TextStyle(fontSize: 13)),
-                      ],
+                  // 힌트(손가락+문구)
+                  if (showHint)
+                    Opacity(
+                      opacity: 0.25,
+                      child: Column(
+                        children: [
+                          Icon(Icons.swipe, size: 40),
+                          const SizedBox(height: 4),
+                          Text('카드를 탭하거나 스와이프하세요', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                  if (showHint) const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -195,30 +257,56 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: 'Pretendard', // 가독성 높은 폰트(설치 필요시 NotoSans, Pretendard 등)
+        scaffoldBackgroundColor: const Color(0xFFF6F2FF), // 연보라 파스텔톤 배경
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
-          brightness: Brightness.light,
+          seedColor: const Color(0xFF7C4DFF), // 브랜드 보라색
+          primary: const Color(0xFF7C4DFF),
+          primaryContainer: const Color(0xFFD1C4E9),
+          secondary: const Color(0xFF9575CD),
+          surface: Colors.white,
+          onPrimary: Colors.white,
+          onSurface: Colors.black87,
         ),
-        // Material 3 디자인 시스템 적용
         cardTheme: const CardThemeData(
-          elevation: 2,
+          elevation: 8,
           margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(28)),
+          ),
+          color: Colors.white,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             elevation: 2,
+            backgroundColor: const Color(0xFFD1C4E9),
+            foregroundColor: const Color(0xFF7C4DFF),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
+            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
         ),
-        // 접근성 개선
         textTheme: const TextTheme(
-          headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-          headlineMedium: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          bodyLarge: TextStyle(fontSize: 16),
-          bodyMedium: TextStyle(fontSize: 14),
+          displaySmall: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
+          headlineMedium: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'Pretendard'),
+          bodyLarge: TextStyle(fontSize: 16, fontFamily: 'Pretendard'),
+          bodyMedium: TextStyle(fontSize: 14, fontFamily: 'Pretendard'),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF7C4DFF)),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF7C4DFF),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Pretendard'),
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Colors.white,
+          selectedItemColor: Color(0xFF7C4DFF),
+          unselectedItemColor: Colors.grey,
+          selectedLabelStyle: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
         ),
       ),
       home: const SplashScreen(),
@@ -625,16 +713,18 @@ class _HomePageState extends State<HomePage> {
   String? deviceId;
   int deviceStatus = 0; // 0: 미등록, 1: 승인대기, 2: 정상
   int _selectedTab = 0; // 0: 단어장, 1: Quiz, 2: 즐겨찾기
+  bool showHint = false;
+  bool filterTodayOnly = false;
 
   @override
   void initState() {
     super.initState();
     favoritesBox = Hive.box('favorites');
-    // TTS 옵션 미리 초기화
     flutterTts.setLanguage('en-US');
     flutterTts.setPitch(1.0);
     _loadDeviceId();
     _fetchWords();
+    _loadHintState();
   }
 
   Future<void> _loadDeviceId() async {
@@ -1182,77 +1272,94 @@ class _HomePageState extends State<HomePage> {
   }
 
   // 필터/정렬 다이얼로그
-  void _showFilterDialog() {
+  void _showFilterDialog() async {
+    bool tempTodayOnly = filterTodayOnly;
     String? selectedPos;
     String? selectedSort = '최신순';
     final posList = words.map((w) => w['partOfSpeech'] as String? ?? '').toSet().toList();
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
+      builder: (ctx) {
+        return AlertDialog(
           title: const Text('필터/정렬'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButton<String>(
-                value: selectedPos,
-                hint: const Text('품사별 필터'),
-                isExpanded: true,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('전체')),
-                  ...posList.map((pos) => DropdownMenuItem(value: pos, child: Text(pos))),
-                ],
-                onChanged: (val) => setState(() => selectedPos = val),
-              ),
-              const SizedBox(height: 12),
-              DropdownButton<String>(
-                value: selectedSort,
-                isExpanded: true,
-                items: const [
-                  DropdownMenuItem(value: '최신순', child: Text('최신순')),
-                  DropdownMenuItem(value: '오래된순', child: Text('오래된순')),
-                  DropdownMenuItem(value: '가나다순', child: Text('가나다순')),
-                ],
-                onChanged: (val) => setState(() => selectedSort = val),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButton<String>(
+                  value: selectedPos,
+                  hint: const Text('품사별 필터'),
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('전체')),
+                    ...posList.map((pos) => DropdownMenuItem(value: pos, child: Text(pos))),
+                  ],
+                  onChanged: (val) => selectedPos = val,
+                ),
+                const SizedBox(height: 12),
+                DropdownButton<String>(
+                  value: selectedSort,
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(value: '최신순', child: Text('최신순')),
+                    DropdownMenuItem(value: '오래된순', child: Text('오래된순')),
+                    DropdownMenuItem(value: '가나다순', child: Text('가나다순')),
+                  ],
+                  onChanged: (val) => selectedSort = val,
+                ),
+                CheckboxListTile(
+                  title: const Text('오늘의 단어'),
+                  value: tempTodayOnly,
+                  onChanged: (v) {
+                    setState(() {
+                      tempTodayOnly = v ?? false;
+                    });
+                  },
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('닫기'),
+              onPressed: () {
+                Navigator.pop(ctx);
+              },
+              child: const Text('취소'),
             ),
             FilledButton(
               onPressed: () {
-                // 필터/정렬 적용 로직 (예시: setState로 words 리스트 재정렬/필터)
-                List<Map<String, dynamic>> filtered = [...words];
-                final pos = selectedPos;
-                if (pos != null && pos.isNotEmpty) {
-                  filtered = filtered.where((w) => w['partOfSpeech'] == pos).toList();
-                }
-                if (selectedSort == '최신순') {
-                  filtered.sort((a, b) => (b['input_timestamp'] as Timestamp).compareTo(a['input_timestamp'] as Timestamp));
-                } else if (selectedSort == '오래된순') {
-                  filtered.sort((a, b) => (a['input_timestamp'] as Timestamp).compareTo(b['input_timestamp'] as Timestamp));
-                } else if (selectedSort == '가나다순') {
-                  filtered.sort((a, b) => (a['word'] as String).compareTo(b['word'] as String));
-                }
                 setState(() {
-                  if (showTodayWords) {
-                    todayWords = filtered;
-                  } else {
-                    words = filtered;
-                  }
+                  filterTodayOnly = tempTodayOnly;
+                  // ... 기존 필터 적용 ...
                   currentIndex = 0;
+                  revealedWordIndexes.clear();
+                  revealedMeaningIndexes.clear();
                 });
                 Navigator.pop(ctx);
               },
               child: const Text('적용'),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  Future<void> _loadHintState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('hint_seen') ?? false;
+    setState(() {
+      showHint = !seen;
+    });
+  }
+
+  Future<void> _hideHint() async {
+    if (!showHint) return;
+    setState(() {
+      showHint = false;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hint_seen', true);
   }
 
   @override
@@ -1384,7 +1491,7 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     }
-    final list = showTodayWords ? todayWords : words;
+    final list = filterTodayOnly ? todayWords : words;
     if (list.isEmpty) {
       return Scaffold(
         appBar: AppBar(
@@ -1413,13 +1520,13 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                showTodayWords ? Icons.today : Icons.book,
+                filterTodayOnly ? Icons.today : Icons.book,
                 size: 64,
                 color: Theme.of(context).colorScheme.outline,
               ),
               const SizedBox(height: 16),
               Text(
-                showTodayWords ? '오늘 추가된 단어가 없습니다.' : '등록된 단어가 없습니다.',
+                filterTodayOnly ? '오늘의 단어가 없습니다.' : '등록된 단어가 없습니다.',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -1427,8 +1534,8 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 8),
               Text(
-                showTodayWords 
-                    ? '관리자 페이지에서 오늘 단어를 추가해보세요.'
+                filterTodayOnly 
+                    ? '관리자 페이지에서 오늘의 단어를 추가해보세요.'
                     : '관리자 페이지에서 단어를 추가해보세요.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1507,11 +1614,6 @@ class _HomePageState extends State<HomePage> {
             onPressed: _showCalendarDialog,
             tooltip: '달력',
           ),
-          IconButton(
-            icon: Icon(showTodayWords ? Icons.list : Icons.today),
-            onPressed: _toggleTodayWords,
-            tooltip: showTodayWords ? '전체 단어 보기' : '오늘의 단어',
-          ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(32),
@@ -1560,64 +1662,112 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
       body: _selectedTab == 0
-          ? Align(
-              alignment: const Alignment(0, -0.4),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                transitionBuilder: (child, anim) {
-                  final beginOffset = const Offset(1, 0);
-                  final endOffset = Offset.zero;
-                  return SlideTransition(
-                    position: anim.drive(Tween<Offset>(begin: beginOffset, end: endOffset).chain(CurveTween(curve: Curves.ease))),
-                    child: child,
-                  );
-                },
-                switchInCurve: Curves.easeInOut,
-                switchOutCurve: Curves.easeInOut,
-                child: GestureDetector(
-                  key: ValueKey('$showTodayWords-$currentIndex'),
-                  behavior: HitTestBehavior.opaque,
-                  onHorizontalDragUpdate: (details) {
-                    if (details.primaryDelta == null) return;
-                    final listLen = list.length;
-                    if (details.primaryDelta! < -20) {
-                      if (currentIndex < listLen - 1) {
-                        setState(() {
-                          prevIndex = currentIndex;
-                          currentIndex++;
-                        });
-                      }
-                      revealedWordIndexes.clear();
-                      revealedMeaningIndexes.clear();
-                    } else if (details.primaryDelta! > 20) {
-                      if (currentIndex > 0) {
-                        setState(() {
-                          prevIndex = currentIndex;
-                          currentIndex--;
-                        });
-                      }
-                      revealedWordIndexes.clear();
-                      revealedMeaningIndexes.clear();
-                    }
-                  },
-                  child: WordCard(
-                    word: word,
-                    partOfSpeech: partOfSpeech,
-                    meaning: meaning,
-                    idx: currentIndex,
-                    isSpeaking: isSpeaking,
-                    isFavorite: isFavoriteWord(word),
-                    hideWord: mode == StudyMode.hideWord,
-                    hideMeaning: mode == StudyMode.hideMeaning,
-                    revealedWord: revealedWordIndexes.contains(currentIndex),
-                    revealedMeaning: revealedMeaningIndexes.contains(currentIndex),
-                    onSpeak: () => _speak(word),
-                    onToggleFavorite: () => toggleFavorite(word),
-                    onRevealWord: () => revealWord(currentIndex),
-                    onRevealMeaning: () => revealMeaning(currentIndex),
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(flex: 2),
+                Align(
+                  alignment: const Alignment(0, -0.4),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder: (child, anim) {
+                      final beginOffset = const Offset(1, 0);
+                      final endOffset = Offset.zero;
+                      return SlideTransition(
+                        position: anim.drive(Tween<Offset>(begin: beginOffset, end: endOffset).chain(CurveTween(curve: Curves.ease))),
+                        child: child,
+                      );
+                    },
+                    switchInCurve: Curves.easeInOut,
+                    switchOutCurve: Curves.easeInOut,
+                    child: GestureDetector(
+                      key: ValueKey('$filterTodayOnly-$currentIndex-$showHint'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        _hideHint();
+                      },
+                      onHorizontalDragStart: (_) {
+                        _hideHint();
+                      },
+                      onHorizontalDragUpdate: (details) {
+                        if (details.primaryDelta == null) return;
+                        final listLen = list.length;
+                        if (details.primaryDelta! < -20) {
+                          if (currentIndex < listLen - 1) {
+                            setState(() {
+                              prevIndex = currentIndex;
+                              currentIndex++;
+                            });
+                          }
+                          revealedWordIndexes.clear();
+                          revealedMeaningIndexes.clear();
+                        } else if (details.primaryDelta! > 20) {
+                          if (currentIndex > 0) {
+                            setState(() {
+                              prevIndex = currentIndex;
+                              currentIndex--;
+                            });
+                          }
+                          revealedWordIndexes.clear();
+                          revealedMeaningIndexes.clear();
+                        }
+                      },
+                      child: WordCard(
+                        word: word,
+                        partOfSpeech: partOfSpeech,
+                        meaning: meaning,
+                        idx: currentIndex,
+                        isSpeaking: isSpeaking,
+                        isFavorite: isFavoriteWord(word),
+                        hideWord: mode == StudyMode.hideWord || mode == StudyMode.randomHide,
+                        hideMeaning: mode == StudyMode.hideMeaning || mode == StudyMode.randomHide,
+                        revealedWord: revealedWordIndexes.contains(currentIndex),
+                        revealedMeaning: revealedMeaningIndexes.contains(currentIndex),
+                        onSpeak: () => _speak(word),
+                        onToggleFavorite: () => toggleFavorite(word),
+                        onRevealWord: () => revealWord(currentIndex),
+                        onRevealMeaning: () => revealMeaning(currentIndex),
+                        showHint: showHint,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 24),
+                // 학습 모드 버튼 Row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildModeButton(
+                        icon: Icons.visibility,
+                        label: '일반',
+                        selected: mode == StudyMode.normal,
+                        onTap: () => setState(() => mode = StudyMode.normal),
+                      ),
+                      _buildModeButton(
+                        icon: Icons.visibility_off,
+                        label: '뜻 가리기',
+                        selected: mode == StudyMode.hideMeaning,
+                        onTap: () => setState(() => mode = StudyMode.hideMeaning),
+                      ),
+                      _buildModeButton(
+                        icon: Icons.text_fields,
+                        label: '영단어',
+                        selected: mode == StudyMode.hideWord,
+                        onTap: () => setState(() => mode = StudyMode.hideWord),
+                      ),
+                      _buildModeButton(
+                        icon: Icons.shuffle,
+                        label: '랜덤',
+                        selected: mode == StudyMode.randomHide,
+                        onTap: () => setState(() => mode = StudyMode.randomHide),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(flex: 3),
+              ],
             )
           : _selectedTab == 1
               ? Center(child: Text('Quiz 화면 (추후 구현)', style: TextStyle(fontSize: 20)))
@@ -1700,6 +1850,57 @@ class _HomePageState extends State<HomePage> {
           unselectedItemColor: Colors.grey,
           backgroundColor: Colors.white,
           type: BottomNavigationBarType.fixed,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeButton({
+    required IconData icon,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFF7C4DFF) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? const Color(0xFF7C4DFF) : Colors.grey.shade300,
+                width: 2,
+              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: selected ? Colors.white : Colors.deepPurple, size: 28),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? Colors.white : Colors.deepPurple,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
