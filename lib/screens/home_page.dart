@@ -13,6 +13,34 @@ import 'package:table_calendar/table_calendar.dart';
 
 enum StudyMode { normal, hideMeaning, hideWord, randomHide }
 
+// --- [무한루프용 커스텀 Physics] ---
+class CustomPageViewScrollPhysics extends ScrollPhysics {
+  final void Function(ScrollMetrics, double) onOverScroll;
+  const CustomPageViewScrollPhysics({required this.onOverScroll, ScrollPhysics? parent}) : super(parent: parent);
+
+  @override
+  CustomPageViewScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return CustomPageViewScrollPhysics(onOverScroll: onOverScroll, parent: buildParent(ancestor));
+  }
+
+  @override
+  double applyBoundaryConditions(ScrollMetrics position, double value) {
+    // value < position.pixels: 오른쪽(이전) 스와이프
+    // value > position.pixels: 왼쪽(다음) 스와이프
+    if (value < position.pixels && position.pixels <= position.minScrollExtent) {
+      // 맨 앞에서 오른쪽(이전) 스와이프
+      onOverScroll(position, value);
+      return 0.0;
+    }
+    if (value > position.pixels && position.pixels >= position.maxScrollExtent) {
+      // 맨 뒤에서 왼쪽(다음) 스와이프
+      onOverScroll(position, value);
+      return 0.0;
+    }
+    return super.applyBoundaryConditions(position, value);
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -43,6 +71,7 @@ class _HomePageState extends State<HomePage> {
   bool filterTodayOnly = false;
   PageController? _pageController;
   bool infiniteLoop = false;
+  bool isLoopJumping = false; // 무한루프 jump 중인지 플래그
 
   @override
   void initState() {
@@ -53,6 +82,13 @@ class _HomePageState extends State<HomePage> {
     _loadDeviceId();
     _fetchWords();
     _loadHintState();
+    _pageController = PageController(initialPage: currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDeviceId() async {
@@ -555,6 +591,31 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // 무한루프 경계 스와이프 시 jumpToPage
+  void jumpToEdgePage(ScrollMetrics position, double value) {
+    final list = filterTodayOnly ? todayWords : words;
+    if (!infiniteLoop || list.length <= 1 || _pageController == null) return;
+    if (position.pixels <= position.minScrollExtent && value < position.pixels) {
+      // 맨 앞에서 오른쪽(이전) 스와이프 → 마지막 페이지로 animate
+      Future.microtask(() {
+        _pageController?.animateToPage(
+          list.length - 1,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.ease,
+        );
+      });
+    } else if (position.pixels >= position.maxScrollExtent && value > position.pixels) {
+      // 맨 뒤에서 왼쪽(다음) 스와이프 → 첫 페이지로 animate
+      Future.microtask(() {
+        _pageController?.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.ease,
+        );
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -827,8 +888,9 @@ class _HomePageState extends State<HomePage> {
                           width: 340,
                           height: 440,
                           child: PageView.builder(
-                            controller: _pageController ??= PageController(initialPage: currentIndex),
+                            controller: _pageController,
                             itemCount: list.length,
+                            physics: CustomPageViewScrollPhysics(onOverScroll: jumpToEdgePage),
                             onPageChanged: (idx) {
                               setState(() {
                                 prevIndex = currentIndex;
@@ -870,7 +932,6 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // 학습 모드 버튼 Row
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24.0),
                         child: Row(
