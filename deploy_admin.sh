@@ -7,6 +7,10 @@ set -e
 
 # 1. admin 디렉토리로 이동 후 빌드 (base-href 옵션 추가)
 cd "$(dirname "$0")/admin" || exit 1
+echo "[0/5] Flutter clean & pub get..."
+flutter clean
+flutter pub get
+
 echo "[1/5] Flutter Web 빌드 시작..."
 flutter build web --base-href /sominword/
 

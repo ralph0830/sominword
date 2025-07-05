@@ -3,7 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'package:flutter/services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -711,6 +710,15 @@ class DeviceListPage extends StatelessWidget {
                           _showEditNicknameDialog(context, deviceId, nickname);
                         },
                       ),
+                      // [수정] 일반 관리자만 보이는 '다른 기기로 단어 복사' 버튼 (보라색 복사 아이콘)
+                      if (!isSuperAdmin && email != null)
+                        IconButton(
+                          icon: const Icon(Icons.copy, size: 20, color: Colors.deepPurple),
+                          tooltip: '다른 기기로 단어 복사',
+                          onPressed: () {
+                            _showCopyWordsDialog(context, deviceId, deviceName);
+                          },
+                        ),
                     ],
                   ),
                   subtitle: Column(
@@ -726,13 +734,10 @@ class DeviceListPage extends StatelessWidget {
                           ),
                           if (isSuperAdmin)
                             IconButton(
-                              icon: const Icon(Icons.copy, size: 18),
-                              tooltip: 'ID 복사',
+                              icon: const Icon(Icons.copy, size: 20, color: Colors.deepPurple),
+                              tooltip: '다른 기기로 단어 복사',
                               onPressed: () {
-                                Clipboard.setData(ClipboardData(text: deviceId));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('기기 ID가 클립보드에 복사되었습니다.')),
-                                );
+                                _showCopyWordsDialog(context, deviceId, deviceName);
                               },
                             ),
                         ],
@@ -1317,6 +1322,135 @@ class DeviceListPage extends StatelessWidget {
       ),
     );
   }
+
+  void _showCopyWordsDialog(BuildContext context, String fromDeviceId, String fromDeviceName) async {
+    // 본인 소유 기기 목록 조회
+    final devicesSnapshot = await FirebaseFirestore.instance
+        .collection('devices')
+        .where('ownerEmail', isEqualTo: email)
+        .get();
+    final devices = devicesSnapshot.docs
+        .where((doc) => doc.id != fromDeviceId)
+        .toList();
+    if (devices.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => const AlertDialog(
+          title: Text('단어 복사'),
+          content: Text('복사할 대상 기기가 없습니다.'),
+        ),
+      );
+      return;
+    }
+    String? selectedDeviceId;
+    String? selectedDeviceName;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('다른 기기로 단어 복사'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('[$fromDeviceName]의 단어를 복사할 기기를 선택하세요.'),
+              const SizedBox(height: 16),
+              DropdownButton<String>(
+                isExpanded: true,
+                value: selectedDeviceId,
+                hint: const Text('대상 기기 선택'),
+                items: devices.map((doc) {
+                  final data = doc.data();
+                  final name = data['deviceName'] ?? doc.id;
+                  return DropdownMenuItem<String>(
+                    value: doc.id,
+                    child: Text('$name (${doc.id})'),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    selectedDeviceId = val;
+                    selectedDeviceName = devices.firstWhere((d) => d.id == val).data()['deviceName'] ?? val;
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: selectedDeviceId == null
+                  ? null
+                  : () async {
+                      Navigator.pop(ctx);
+                      await _copyWordsToDevice(context, fromDeviceId, selectedDeviceId!, fromDeviceName, selectedDeviceName ?? selectedDeviceId!);
+                    },
+              child: const Text('복사'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copyWordsToDevice(BuildContext context, String fromDeviceId, String toDeviceId, String fromDeviceName, String toDeviceName) async {
+    final firestore = FirebaseFirestore.instance;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        title: Text('단어 복사 중...'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('단어를 복사하고 있습니다.'),
+          ],
+        ),
+      ),
+    );
+    try {
+      final fromWordsSnap = await firestore.collection('devices/$fromDeviceId/words').get();
+      if (fromWordsSnap.docs.isEmpty) {
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('복사할 단어가 없습니다.')),
+          );
+        }
+        return;
+      }
+      final toWordsSnap = await firestore.collection('devices/$toDeviceId/words').get();
+      final toWords = toWordsSnap.docs.map((d) => d.data()['englishWord'] as String?).toSet();
+      int copied = 0;
+      final batch = firestore.batch();
+      for (final doc in fromWordsSnap.docs) {
+        final data = doc.data();
+        final eng = data['englishWord'] ?? data['englishWord'] ?? data['eng'] ?? '';
+        if (eng.isEmpty || toWords.contains(eng)) continue; // 중복 방지
+        final newDoc = firestore.collection('devices/$toDeviceId/words').doc();
+        batch.set(newDoc, data);
+        copied++;
+      }
+      await batch.commit();
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('[$fromDeviceName]의 단어 $copied개가 [$toDeviceName]로 복사되었습니다.'),),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('복사 실패: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 }
 
 class WordAdminPage extends StatefulWidget {
@@ -1866,11 +2000,11 @@ class AdminManagementPage extends StatelessWidget {
                     child: Text('기기 추가 신청', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                   ...pending.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final deviceId = data['deviceId'] ?? '';
-                    final deviceName = data['deviceName'] ?? '';
-                    final ownerEmail = data['ownerEmail'] ?? '';
-                    final requestedAt = data['requestedAt'] as Timestamp?;
+                    final data = doc.data() as Map<String, dynamic>?;
+                    final deviceId = data?['deviceId'] ?? '';
+                    final deviceName = data?['deviceName'] ?? '';
+                    final ownerEmail = data?['ownerEmail'] ?? '';
+                    final requestedAt = data?['requestedAt'] as Timestamp?;
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       child: ListTile(
@@ -1943,15 +2077,15 @@ class AdminManagementPage extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   itemCount: admins.length,
                   itemBuilder: (context, index) {
-                    final admin = admins[index].data() as Map<String, dynamic>;
+                    final admin = admins[index].data() as Map<String, dynamic>?;
                     final adminId = admins[index].id;
-                    final email = admin['email'] ?? '';
-                    final deviceId = admin['deviceId'] ?? '';
-                    final deviceName = admin['deviceName'] ?? 'Unknown Device';
-                    final isApproved = admin['isApproved'] ?? false;
-                    final requestedAt = admin['requestedAt'] as Timestamp?;
-                    final approvedAt = admin['approvedAt'] as Timestamp?;
-                    final approvedBy = admin['approvedBy'] as String?;
+                    final email = admin?['email'] ?? '';
+                    final deviceId = admin?['deviceId'] ?? '';
+                    final deviceName = admin?['deviceName'] ?? 'Unknown Device';
+                    final isApproved = admin?['isApproved'] ?? false;
+                    final requestedAt = admin?['requestedAt'] as Timestamp?;
+                    final approvedAt = admin?['approvedAt'] as Timestamp?;
+                    final approvedBy = admin?['approvedBy'] as String?;
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -2177,13 +2311,13 @@ class DeviceApprovalStatusPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemCount: devices.length,
             itemBuilder: (context, index) {
-              final data = devices[index].data() as Map<String, dynamic>;
-              final deviceId = data['deviceId'] ?? devices[index].id;
-              final deviceName = data['deviceName'] ?? '';
-              final ownerEmail = data['ownerEmail'] ?? '';
-              final createdAt = data['createdAt'];
-              final lastActiveAt = data['lastActiveAt'];
-              final nickname = data['nickname'] ?? '';
+              final data = devices[index].data() as Map<String, dynamic>?;
+              final deviceId = data?['deviceId'] ?? devices[index].id;
+              final deviceName = data?['deviceName'] ?? '';
+              final ownerEmail = data?['ownerEmail'] ?? '';
+              final createdAt = data?['createdAt'];
+              final lastActiveAt = data?['lastActiveAt'];
+              final nickname = data?['nickname'] ?? '';
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(

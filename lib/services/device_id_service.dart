@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_udid/flutter_udid.dart';
+import 'package:uuid/uuid.dart';
 
 class DeviceIdService {
   static const String _deviceIdKey = 'device_id';
@@ -11,98 +11,36 @@ class DeviceIdService {
   factory DeviceIdService() => _instance;
   DeviceIdService._internal();
 
-  String? _cachedDeviceId;
-  String? _cachedDeviceName;
-
-  /// 기기 ID를 가져오거나 생성합니다.
+  /// 기기 ID를 항상 flutter_udid로 강제 초기화하여 가져옵니다.
   Future<String> getDeviceId() async {
-    if (_cachedDeviceId != null) {
-      return _cachedDeviceId!;
-    }
-
     final prefs = await SharedPreferences.getInstance();
-    String? deviceId = prefs.getString(_deviceIdKey);
-    
-    if (deviceId == null) {
-      final deviceInfo = DeviceInfoPlugin();
-      
+    String? deviceId;
+    if (kIsWeb) {
+      deviceId = const Uuid().v4();
+      debugPrint('[DeviceIdService] Web 환경, 새 UUID 생성: $deviceId');
+    } else {
       try {
-        if (kIsWeb) {
-          // 웹 환경에서는 UUID 생성
-          deviceId = const Uuid().v4();
-        } else {
-          // 모바일 환경에서만 Platform 체크
-          if (defaultTargetPlatform == TargetPlatform.android) {
-            final androidInfo = await deviceInfo.androidInfo;
-            deviceId = androidInfo.id;
-          } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-            final iosInfo = await deviceInfo.iosInfo;
-            deviceId = iosInfo.identifierForVendor;
-          } else {
-            // 기타 플랫폼에서는 UUID 생성
-            deviceId = const Uuid().v4();
-          }
-        }
+        deviceId = await FlutterUdid.udid;
+        debugPrint('[DeviceIdService][flutter_udid] udid: $deviceId');
       } catch (e) {
-        // 예외 발생 시 UUID 생성
         deviceId = const Uuid().v4();
+        debugPrint('[DeviceIdService][flutter_udid][오류] $e, fallback UUID: $deviceId');
       }
-      
-      await prefs.setString(_deviceIdKey, deviceId!);
     }
-    _cachedDeviceId = deviceId;
+    await prefs.setString(_deviceIdKey, deviceId);
+    debugPrint('[DeviceIdService] SharedPreferences에 device_id 저장(덮어씀): $deviceId');
     return deviceId;
   }
 
-  /// 기기 이름을 가져오거나 생성합니다.
+  /// 기기 이름을 반환합니다(플랫폼명+UUID 일부).
   Future<String> getDeviceName() async {
-    if (_cachedDeviceName != null) {
-      return _cachedDeviceName!;
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    String? deviceName = prefs.getString(_deviceNameKey);
-    
-    if (deviceName == null) {
-      deviceName = _generateDefaultDeviceName();
-      await prefs.setString(_deviceNameKey, deviceName);
-    }
-    _cachedDeviceName = deviceName;
-    return deviceName;
+    if (kIsWeb) return 'Web';
+    return defaultTargetPlatform.name;
   }
 
   /// 기기 이름을 업데이트합니다.
   Future<void> updateDeviceName(String newName) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_deviceNameKey, newName);
-    _cachedDeviceName = newName;
-  }
-
-  /// 기본 기기 이름을 생성합니다.
-  String _generateDefaultDeviceName() {
-    if (kIsWeb) {
-      return 'Web Browser';
-    }
-    
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'Android';
-      case TargetPlatform.iOS:
-        return 'iOS';
-      case TargetPlatform.windows:
-        return 'Windows';
-      case TargetPlatform.macOS:
-        return 'macOS';
-      case TargetPlatform.linux:
-        return 'Linux';
-      case TargetPlatform.fuchsia:
-        return 'Fuchsia';
-    }
-  }
-
-  /// 캐시를 초기화합니다.
-  void clearCache() {
-    _cachedDeviceId = null;
-    _cachedDeviceName = null;
   }
 } 

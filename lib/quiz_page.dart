@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_to_text.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class QuizPage extends StatefulWidget {
   final bool showAppBar;
@@ -237,7 +238,9 @@ class _QuizPageState extends State<QuizPage> {
         });
       },
       localeId: 'en_US',
-      listenMode: ListenMode.confirmation,
+      listenOptions: SpeechListenOptions(
+        listenMode: ListenMode.confirmation,
+      ),
     );
   }
 
@@ -248,6 +251,40 @@ class _QuizPageState extends State<QuizPage> {
     if (_lastWords.trim().isNotEmpty) {
       _checkAnswer();
     }
+  }
+
+  Future<bool> _checkMicPermissionAndRequest(BuildContext context) async {
+    var status = await Permission.microphone.status;
+    if (status.isGranted) return true;
+    if (status.isDenied || status.isPermanentlyDenied || status.isRestricted) {
+      // 안내 다이얼로그
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('마이크 권한 필요'),
+            content: const Text('음성 인식 기능을 사용하려면 마이크 권한이 필요합니다.\n설정에서 권한을 허용해 주세요.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('취소'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await openAppSettings();
+                },
+                child: const Text('설정으로 이동'),
+              ),
+            ],
+          ),
+        );
+      }
+      return false;
+    }
+    // 최초 요청(neverAskAgain이 아닌 경우)
+    var result = await Permission.microphone.request();
+    return result.isGranted;
   }
 
   @override
@@ -366,7 +403,11 @@ class _QuizPageState extends State<QuizPage> {
             ] else ...[
               // 모바일용 음성 인식 버튼
               GestureDetector(
-                onTapDown: (_) => _startListening(),
+                onTapDown: (_) async {
+                  if (await _checkMicPermissionAndRequest(context)) {
+                    _startListening();
+                  }
+                },
                 onTapUp: (_) => _stopListening(),
                 onTapCancel: () => _stopListening(),
                 child: Container(

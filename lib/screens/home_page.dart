@@ -140,12 +140,12 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _onTitleTap() {
+  void _onTitleTap() async {
     setState(() {
       titleClickCount++;
     });
     if (titleClickCount >= 5) {
-      _showDeviceIdDialog();
+      await _showDeviceIdDialog();
       titleClickCount = 0; // 리셋
     }
     Future.delayed(const Duration(seconds: 3), () {
@@ -157,7 +157,10 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _showDeviceIdDialog() {
+  Future<void> _showDeviceIdDialog() async {
+    final deviceIdService = DeviceIdService();
+    final latestDeviceId = await deviceIdService.getDeviceId();
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -175,10 +178,10 @@ class _HomePageState extends State<HomePage> {
                   width: 1,
                 ),
                 borderRadius: BorderRadius.circular(12),
-                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                color: Theme.of(context).colorScheme.primaryContainer.withAlpha(77),
               ),
               child: Text(
-                deviceId ?? '로딩 중...',
+                latestDeviceId,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
@@ -195,8 +198,8 @@ class _HomePageState extends State<HomePage> {
           ),
           FilledButton.icon(
             onPressed: () {
-              if (deviceId != null) {
-                Clipboard.setData(ClipboardData(text: deviceId!));
+              if (latestDeviceId.isNotEmpty) {
+                Clipboard.setData(ClipboardData(text: latestDeviceId));
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -764,7 +767,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          deviceId ?? '로딩 중...',
+                          (deviceId?.isNotEmpty ?? false) ? deviceId! : '로딩 중...',
                           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             fontFamily: 'monospace',
                             fontWeight: FontWeight.bold,
@@ -773,7 +776,7 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 12),
                         FilledButton.icon(
                           onPressed: () {
-                            if (deviceId != null) {
+                            if (deviceId?.isNotEmpty ?? false) {
                               Clipboard.setData(ClipboardData(text: deviceId!));
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
