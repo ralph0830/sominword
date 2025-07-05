@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 
 class QuizPage extends StatefulWidget {
-  const QuizPage({super.key});
+  final bool showAppBar;
+  const QuizPage({super.key, this.showAppBar = true});
 
   @override
   State<QuizPage> createState() => _QuizPageState();
@@ -205,71 +206,42 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   Widget build(BuildContext context) {
+    Widget quizBody;
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_words.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('발음 퀴즈')),
-        body: const Center(
-          child: Text('퀴즈할 단어가 없습니다.'),
-        ),
-      );
-    }
-
-    if (_isQuizComplete) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('퀴즈 완료')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.celebration, size: 80, color: Colors.amber),
-              const SizedBox(height: 24),
-              Text(
-                '퀴즈 완료!',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '점수: $_score / $_totalQuestions',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _restartQuiz,
-                child: const Text('다시 시작'),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('돌아가기'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('발음 퀴즈'),
-        actions: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                '${_currentIndex + 1} / ${_words.length}',
-                style: const TextStyle(fontSize: 16),
-              ),
+      quizBody = const Center(child: CircularProgressIndicator());
+    } else if (_words.isEmpty) {
+      quizBody = const Center(child: Text('퀴즈할 단어가 없습니다.'));
+    } else if (_isQuizComplete) {
+      quizBody = Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.celebration, size: 80, color: Colors.amber),
+            const SizedBox(height: 24),
+            Text(
+              '퀴즈 완료!',
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
-          ),
-        ],
-      ),
-      body: Padding(
+            const SizedBox(height: 16),
+            Text(
+              '점수: $_score / $_totalQuestions',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _restartQuiz,
+              child: const Text('다시 시작'),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('돌아가기'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      quizBody = Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
@@ -280,7 +252,6 @@ class _QuizPageState extends State<QuizPage> {
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
             ),
             const SizedBox(height: 24),
-            
             // 점수 표시
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -291,7 +262,6 @@ class _QuizPageState extends State<QuizPage> {
               ],
             ),
             const SizedBox(height: 32),
-            
             // 문제 카드
             Card(
               elevation: 8,
@@ -326,7 +296,6 @@ class _QuizPageState extends State<QuizPage> {
               ),
             ),
             const SizedBox(height: 32),
-            
             // 웹용 텍스트 입력
             if (kIsWeb) ...[
               Row(
@@ -374,9 +343,7 @@ class _QuizPageState extends State<QuizPage> {
                 style: const TextStyle(fontSize: 16),
               ),
             ],
-            
             const SizedBox(height: 16),
-            
             // 입력된 답안 표시
             if (_lastWords.isNotEmpty)
               Container(
@@ -396,9 +363,7 @@ class _QuizPageState extends State<QuizPage> {
                   ],
                 ),
               ),
-            
             const SizedBox(height: 16),
-            
             // 피드백 메시지
             if (_showFeedback)
               Container(
@@ -416,9 +381,7 @@ class _QuizPageState extends State<QuizPage> {
                   ),
                 ),
               ),
-            
             const Spacer(),
-            
             // 웹에서는 힌트 표시
             if (kIsWeb)
               Container(
@@ -435,8 +398,31 @@ class _QuizPageState extends State<QuizPage> {
               ),
           ],
         ),
-      ),
-    );
+      );
+    }
+
+    if (widget.showAppBar) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('발음 퀴즈'),
+          actions: [
+            if (!_isLoading && _words.isNotEmpty && !_isQuizComplete)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    '${_currentIndex + 1} / ${_words.length}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        body: quizBody,
+      );
+    } else {
+      return quizBody;
+    }
   }
 
   @override

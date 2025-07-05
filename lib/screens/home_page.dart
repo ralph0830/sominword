@@ -1033,7 +1033,7 @@ class _HomePageState extends State<HomePage> {
                           appBar: AppBar(
                             title: const Text('발음 퀴즈'),
                           ),
-                          body: const QuizPage(),
+                          body: const QuizPage(showAppBar: false),
                           bottomNavigationBar: SafeArea(
                             child: BottomNavigationBar(
                               currentIndex: _selectedTab,
@@ -1152,12 +1152,12 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } else if (_selectedTab == 1) {
-      // 퀴즈 탭: QuizPage를 body로, 하단 네비게이션 바 포함
+      // 퀴즈 탭: QuizPage를 body로, 하단 네비게이션 바 포함 (QuizPage 내부 Scaffold/AppBar 제거)
       return Scaffold(
         appBar: AppBar(
           title: const Text('발음 퀴즈'),
         ),
-        body: const QuizPage(),
+        body: const QuizPage(showAppBar: false),
         bottomNavigationBar: SafeArea(
           child: BottomNavigationBar(
             currentIndex: _selectedTab,
