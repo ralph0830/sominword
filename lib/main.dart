@@ -715,6 +715,7 @@ class _HomePageState extends State<HomePage> {
   int _selectedTab = 0; // 0: 단어장, 1: Quiz, 2: 즐겨찾기
   bool showHint = false;
   bool filterTodayOnly = false;
+  PageController? _pageController;
 
   @override
   void initState() {
@@ -1280,66 +1281,81 @@ class _HomePageState extends State<HomePage> {
     await showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('필터/정렬'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButton<String>(
-                  value: selectedPos,
-                  hint: const Text('품사별 필터'),
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('전체')),
-                    ...posList.map((pos) => DropdownMenuItem(value: pos, child: Text(pos))),
-                  ],
-                  onChanged: (val) => selectedPos = val,
-                ),
-                const SizedBox(height: 12),
-                DropdownButton<String>(
-                  value: selectedSort,
-                  isExpanded: true,
-                  items: const [
-                    DropdownMenuItem(value: '최신순', child: Text('최신순')),
-                    DropdownMenuItem(value: '오래된순', child: Text('오래된순')),
-                    DropdownMenuItem(value: '가나다순', child: Text('가나다순')),
-                  ],
-                  onChanged: (val) => selectedSort = val,
-                ),
-                CheckboxListTile(
-                  title: const Text('오늘의 단어'),
-                  value: tempTodayOnly,
-                  onChanged: (v) {
-                    setState(() {
-                      tempTodayOnly = v ?? false;
-                    });
-                  },
-                ),
-              ],
+        return StatefulBuilder(
+          builder: (ctx, setState) => AlertDialog(
+            title: const Text('필터/정렬'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 품사 필터 그룹
+                  const Text('품사', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  DropdownButton<String>(
+                    value: selectedPos,
+                    hint: const Text('전체'),
+                    isExpanded: true,
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('전체')),
+                      ...posList.map((pos) => DropdownMenuItem(value: pos, child: Text(pos))),
+                    ],
+                    onChanged: (val) => setState(() => selectedPos = val),
+                  ),
+                  const SizedBox(height: 20),
+                  // 정렬 그룹
+                  const Text('정렬', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  DropdownButton<String>(
+                    value: selectedSort,
+                    isExpanded: true,
+                    items: const [
+                      DropdownMenuItem(value: '최신순', child: Text('최신순')),
+                      DropdownMenuItem(value: '오래된순', child: Text('오래된순')),
+                      DropdownMenuItem(value: '가나다순', child: Text('가나다순')),
+                    ],
+                    onChanged: (val) => setState(() => selectedSort = val),
+                  ),
+                  const SizedBox(height: 20),
+                  // 기타 그룹
+                  const Text('기타', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    title: const Text('오늘의 단어'),
+                    value: tempTodayOnly,
+                    onChanged: (v) {
+                      setState(() {
+                        tempTodayOnly = v ?? false;
+                      });
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                },
+                child: const Text('취소'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  setState(() {
+                    filterTodayOnly = tempTodayOnly;
+                    // ... 기존 필터 적용 ...
+                    currentIndex = 0;
+                    revealedWordIndexes.clear();
+                    revealedMeaningIndexes.clear();
+                  });
+                  Navigator.pop(ctx);
+                },
+                child: const Text('적용'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-              },
-              child: const Text('취소'),
-            ),
-            FilledButton(
-              onPressed: () {
-                setState(() {
-                  filterTodayOnly = tempTodayOnly;
-                  // ... 기존 필터 적용 ...
-                  currentIndex = 0;
-                  revealedWordIndexes.clear();
-                  revealedMeaningIndexes.clear();
-                });
-                Navigator.pop(ctx);
-              },
-              child: const Text('적용'),
-            ),
-          ],
         );
       },
     );
@@ -1547,10 +1563,6 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     }
-    final word = list[currentIndex]['word'] as String? ?? '';
-    final partOfSpeech = list[currentIndex]['partOfSpeech'] as String? ?? '';
-    final meaning = list[currentIndex]['meaning'] as String? ?? '';
-
     return Scaffold(
       appBar: AppBar(
         title: GestureDetector(
@@ -1615,215 +1627,160 @@ class _HomePageState extends State<HomePage> {
             tooltip: '달력',
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(32),
-          child: Column(
-            children: [
-              // 진행률 ProgressBar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: LinearProgressIndicator(
-                        value: list.isNotEmpty ? (currentIndex + 1) / list.length : 0,
-                        backgroundColor: Colors.white24,
-                        color: Theme.of(context).colorScheme.secondary,
-                        minHeight: 8,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      list.isNotEmpty ? '${currentIndex + 1}/${list.length}' : '0/0',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-              if (isOffline)
-                Container(
-                  color: Colors.orange,
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                  child: Row(
+        bottom: null,
+      ),
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_selectedTab == 0)
+            ProgressIndicatorBar(
+              currentIndex: currentIndex,
+              total: list.length,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          Expanded(
+            child: _selectedTab == 0
+                ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.wifi_off, color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        '오프라인 모드: 캐시 데이터로 표시 중',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-      body: _selectedTab == 0
-          ? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(flex: 2),
-                Align(
-                  alignment: const Alignment(0, -0.4),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 400),
-                    transitionBuilder: (child, anim) {
-                      final beginOffset = const Offset(1, 0);
-                      final endOffset = Offset.zero;
-                      return SlideTransition(
-                        position: anim.drive(Tween<Offset>(begin: beginOffset, end: endOffset).chain(CurveTween(curve: Curves.ease))),
-                        child: child,
-                      );
-                    },
-                    switchInCurve: Curves.easeInOut,
-                    switchOutCurve: Curves.easeInOut,
-                    child: GestureDetector(
-                      key: ValueKey('$filterTodayOnly-$currentIndex-$showHint'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        _hideHint();
-                      },
-                      onHorizontalDragStart: (_) {
-                        _hideHint();
-                      },
-                      onHorizontalDragUpdate: (details) {
-                        if (details.primaryDelta == null) return;
-                        final listLen = list.length;
-                        if (details.primaryDelta! < -20) {
-                          if (currentIndex < listLen - 1) {
-                            setState(() {
-                              prevIndex = currentIndex;
-                              currentIndex++;
-                            });
-                          }
-                          revealedWordIndexes.clear();
-                          revealedMeaningIndexes.clear();
-                        } else if (details.primaryDelta! > 20) {
-                          if (currentIndex > 0) {
-                            setState(() {
-                              prevIndex = currentIndex;
-                              currentIndex--;
-                            });
-                          }
-                          revealedWordIndexes.clear();
-                          revealedMeaningIndexes.clear();
-                        }
-                      },
-                      child: WordCard(
-                        word: word,
-                        partOfSpeech: partOfSpeech,
-                        meaning: meaning,
-                        idx: currentIndex,
-                        isSpeaking: isSpeaking,
-                        isFavorite: isFavoriteWord(word),
-                        hideWord: mode == StudyMode.hideWord || mode == StudyMode.randomHide,
-                        hideMeaning: mode == StudyMode.hideMeaning || mode == StudyMode.randomHide,
-                        revealedWord: revealedWordIndexes.contains(currentIndex),
-                        revealedMeaning: revealedMeaningIndexes.contains(currentIndex),
-                        onSpeak: () => _speak(word),
-                        onToggleFavorite: () => toggleFavorite(word),
-                        onRevealWord: () => revealWord(currentIndex),
-                        onRevealMeaning: () => revealMeaning(currentIndex),
-                        showHint: showHint,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // 학습 모드 버튼 Row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildModeButton(
-                        icon: Icons.visibility,
-                        label: '일반',
-                        selected: mode == StudyMode.normal,
-                        onTap: () => setState(() => mode = StudyMode.normal),
-                      ),
-                      _buildModeButton(
-                        icon: Icons.visibility_off,
-                        label: '뜻 가리기',
-                        selected: mode == StudyMode.hideMeaning,
-                        onTap: () => setState(() => mode = StudyMode.hideMeaning),
-                      ),
-                      _buildModeButton(
-                        icon: Icons.text_fields,
-                        label: '영단어',
-                        selected: mode == StudyMode.hideWord,
-                        onTap: () => setState(() => mode = StudyMode.hideWord),
-                      ),
-                      _buildModeButton(
-                        icon: Icons.shuffle,
-                        label: '랜덤',
-                        selected: mode == StudyMode.randomHide,
-                        onTap: () => setState(() => mode = StudyMode.randomHide),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(flex: 3),
-              ],
-            )
-          : _selectedTab == 1
-              ? Center(child: Text('Quiz 화면 (추후 구현)', style: TextStyle(fontSize: 20)))
-              : Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      Text('즐겨찾기 단어', style: Theme.of(context).textTheme.headlineMedium),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: Builder(
-                          builder: (context) {
-                            final favoriteWords = words
-                                .where((w) => isFavoriteWord(w['word'] as String? ?? ''))
-                                .toList();
-                            if (favoriteWords.isEmpty) {
-                              return Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.star_border, size: 48, color: Theme.of(context).colorScheme.outline),
-                                    const SizedBox(height: 16),
-                                    Text('즐겨찾기한 단어가 없습니다.',
-                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                      const Spacer(flex: 2),
+                      Align(
+                        alignment: const Alignment(0, -0.4),
+                        child: SizedBox(
+                          width: 340,
+                          height: 440,
+                          child: PageView.builder(
+                            controller: _pageController ??= PageController(initialPage: currentIndex),
+                            itemCount: list.length,
+                            onPageChanged: (idx) {
+                              setState(() {
+                                prevIndex = currentIndex;
+                                currentIndex = idx;
+                                revealedWordIndexes.clear();
+                                revealedMeaningIndexes.clear();
+                              });
+                              _hideHint();
+                            },
+                            itemBuilder: (context, idx) {
+                              final word = list[idx]['word'] as String? ?? '';
+                              final partOfSpeech = list[idx]['partOfSpeech'] as String? ?? '';
+                              final meaning = list[idx]['meaning'] as String? ?? '';
+                              return WordCard(
+                                word: word,
+                                partOfSpeech: partOfSpeech,
+                                meaning: meaning,
+                                idx: idx,
+                                isSpeaking: isSpeaking,
+                                isFavorite: isFavoriteWord(word),
+                                hideWord: mode == StudyMode.hideWord || mode == StudyMode.randomHide,
+                                hideMeaning: mode == StudyMode.hideMeaning || mode == StudyMode.randomHide,
+                                revealedWord: revealedWordIndexes.contains(idx),
+                                revealedMeaning: revealedMeaningIndexes.contains(idx),
+                                onSpeak: () => _speak(word),
+                                onToggleFavorite: () => toggleFavorite(word),
+                                onRevealWord: () => revealWord(idx),
+                                onRevealMeaning: () => revealMeaning(idx),
+                                showHint: showHint && idx == currentIndex,
                               );
-                            }
-                            return ListView.builder(
-                              itemCount: favoriteWords.length,
-                              itemBuilder: (context, idx) {
-                                final w = favoriteWords[idx];
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(vertical: 4),
-                                  child: ListTile(
-                                    leading: const Icon(Icons.star, color: Colors.amber),
-                                    title: Text(
-                                      w['word'] ?? '',
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    subtitle: Text('${w['partOfSpeech']} / ${w['meaning']}'),
-                                  ),
-                                );
-                              },
-                            );
-                          },
+                            },
+                          ),
                         ),
                       ),
+                      const SizedBox(height: 24),
+                      // 학습 모드 버튼 Row
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildModeButton(
+                              icon: Icons.visibility,
+                              label: '일반',
+                              selected: mode == StudyMode.normal,
+                              onTap: () => setState(() => mode = StudyMode.normal),
+                            ),
+                            _buildModeButton(
+                              icon: Icons.visibility_off,
+                              label: '뜻 가리기',
+                              selected: mode == StudyMode.hideMeaning,
+                              onTap: () => setState(() => mode = StudyMode.hideMeaning),
+                            ),
+                            _buildModeButton(
+                              icon: Icons.text_fields,
+                              label: '영단어',
+                              selected: mode == StudyMode.hideWord,
+                              onTap: () => setState(() => mode = StudyMode.hideWord),
+                            ),
+                            _buildModeButton(
+                              icon: Icons.shuffle,
+                              label: '랜덤',
+                              selected: mode == StudyMode.randomHide,
+                              onTap: () => setState(() => mode = StudyMode.randomHide),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(flex: 3),
                     ],
-                  ),
-                ),
+                  )
+                : _selectedTab == 1
+                    ? Center(child: Text('Quiz 화면 (추후 구현)', style: TextStyle(fontSize: 20)))
+                    : Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 24),
+                            Text('즐겨찾기 단어', style: Theme.of(context).textTheme.headlineMedium),
+                            const SizedBox(height: 16),
+                            Expanded(
+                              child: Builder(
+                                builder: (context) {
+                                  final favoriteWords = words
+                                      .where((w) => isFavoriteWord(w['word'] as String? ?? ''))
+                                      .toList();
+                                  if (favoriteWords.isEmpty) {
+                                    return Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.star_border, size: 48, color: Theme.of(context).colorScheme.outline),
+                                          const SizedBox(height: 16),
+                                          Text('즐겨찾기한 단어가 없습니다.',
+                                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                  return ListView.builder(
+                                    itemCount: favoriteWords.length,
+                                    itemBuilder: (context, idx) {
+                                      final w = favoriteWords[idx];
+                                      return Card(
+                                        margin: const EdgeInsets.symmetric(vertical: 4),
+                                        child: ListTile(
+                                          leading: const Icon(Icons.star, color: Colors.amber),
+                                          title: Text(
+                                            w['word'] ?? '',
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                          subtitle: Text('${w['partOfSpeech']} / ${w['meaning']}'),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+          ),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         child: BottomNavigationBar(
           currentIndex: _selectedTab,
@@ -1902,6 +1859,58 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// 진행률 바 위젯 추가
+class ProgressIndicatorBar extends StatelessWidget {
+  final int currentIndex;
+  final int total;
+  final Color color;
+  const ProgressIndicatorBar({super.key, required this.currentIndex, required this.total, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    if (total <= 1) {
+      return const SizedBox(height: 24);
+    }
+    final double barAreaWidth = MediaQuery.of(context).size.width * 0.8;
+    final double barWidth = (barAreaWidth - (total - 1) * 2) / total;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: barAreaWidth,
+            height: 18,
+            child: Row(
+              children: List.generate(total, (idx) {
+                final isActive = idx == currentIndex;
+                return Container(
+                  width: barWidth > 4 ? barWidth : 4,
+                  height: 18,
+                  margin: EdgeInsets.only(right: idx == total - 1 ? 0 : 2),
+                  decoration: BoxDecoration(
+                    color: isActive ? color : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: barAreaWidth,
+            child: Text(
+              '${currentIndex + 1} / $total',
+              style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       ),
     );
   }
