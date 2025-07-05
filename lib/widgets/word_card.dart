@@ -16,8 +16,7 @@ class WordCard extends StatelessWidget {
   final VoidCallback onRevealWord;
   final VoidCallback onRevealMeaning;
   final bool showHint;
-  final bool infiniteLoop;
-  final VoidCallback onToggleInfiniteLoop;
+  final Widget loopButton;
 
   const WordCard({
     super.key,
@@ -36,8 +35,7 @@ class WordCard extends StatelessWidget {
     required this.onRevealWord,
     required this.onRevealMeaning,
     required this.showHint,
-    required this.infiniteLoop,
-    required this.onToggleInfiniteLoop,
+    required this.loopButton,
   });
 
   @override
@@ -83,9 +81,10 @@ class WordCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  // 상단 아이콘 Row (TTS, 무한반복, 즐겨찾기)
+                  // 상단 아이콘 Row (TTS, LOOP, 즐겨찾기)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       // TTS(발음) 아이콘
                       IconButton(
@@ -93,20 +92,8 @@ class WordCard extends StatelessWidget {
                         onPressed: isSpeaking ? null : onSpeak,
                         tooltip: isSpeaking ? '발음 중...' : '발음 듣기',
                       ),
-                      // 무한 반복(좌우 화살표+자물쇠) 아이콘
-                      GestureDetector(
-                        onTap: onToggleInfiniteLoop,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Icon(Icons.sync, size: 28, color: infiniteLoop ? Theme.of(context).colorScheme.primary : Colors.grey[400]),
-                            Positioned(
-                              right: 0, bottom: 0,
-                              child: Icon(Icons.lock, size: 14, color: infiniteLoop ? Theme.of(context).colorScheme.primary : Colors.grey[400]),
-                            ),
-                          ],
-                        ),
-                      ),
+                      // LOOP(무한반복) 버튼 (가운데)
+                      loopButton,
                       // 즐겨찾기(별) 아이콘
                       GestureDetector(
                         onTap: onToggleFavorite,

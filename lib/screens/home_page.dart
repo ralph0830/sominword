@@ -6,34 +6,48 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/device_id_service.dart';
 import '../services/firebase_service.dart';
 import '../widgets/word_card.dart';
-import '../widgets/progress_bar.dart';
 import '../widgets/mode_button.dart';
 import 'package:flutter/services.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:card_swiper/card_swiper.dart';
+import '../widgets/favorite_list.dart';
+import 'package:flutter/foundation.dart';
+import '../quiz_page.dart';
 
 enum StudyMode { normal, hideMeaning, hideWord, randomHide }
 
 // --- [무한루프용 커스텀 Physics] ---
 class CustomPageViewScrollPhysics extends ScrollPhysics {
   final void Function(ScrollMetrics, double) onOverScroll;
-  const CustomPageViewScrollPhysics({required this.onOverScroll, ScrollPhysics? parent}) : super(parent: parent);
+  final bool infiniteLoop;
+  const CustomPageViewScrollPhysics({required this.onOverScroll, required this.infiniteLoop, super.parent});
 
   @override
   CustomPageViewScrollPhysics applyTo(ScrollPhysics? ancestor) {
-    return CustomPageViewScrollPhysics(onOverScroll: onOverScroll, parent: buildParent(ancestor));
+    return CustomPageViewScrollPhysics(onOverScroll: onOverScroll, infiniteLoop: infiniteLoop, parent: buildParent(ancestor));
   }
 
   @override
   double applyBoundaryConditions(ScrollMetrics position, double value) {
     // value < position.pixels: 오른쪽(이전) 스와이프
     // value > position.pixels: 왼쪽(다음) 스와이프
+    if (!infiniteLoop) {
+      // 무한루프 OFF: 경계(dummy) 페이지로의 스크롤 차단
+      if (value < position.pixels && position.pixels <= position.minScrollExtent) {
+        // 맨 앞에서 오른쪽(이전) 스와이프 차단
+        return value - position.pixels;
+      }
+      if (value > position.pixels && position.pixels >= position.maxScrollExtent) {
+        // 맨 뒤에서 왼쪽(다음) 스와이프 차단
+        return value - position.pixels;
+      }
+    }
+    // 무한루프 ON: 기존 동작(overscroll 허용)
     if (value < position.pixels && position.pixels <= position.minScrollExtent) {
-      // 맨 앞에서 오른쪽(이전) 스와이프
       onOverScroll(position, value);
       return 0.0;
     }
     if (value > position.pixels && position.pixels >= position.maxScrollExtent) {
-      // 맨 뒤에서 왼쪽(다음) 스와이프
       onOverScroll(position, value);
       return 0.0;
     }
@@ -49,8 +63,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int currentIndex = 0;
-  int prevIndex = 0; // 이전 인덱스 저장
+  int currentIndex = 0; // 실제 단어 인덱스(0~N-1)
+  int prevIndex = 0;
   List<Map<String, dynamic>> words = [];
   List<Map<String, dynamic>> todayWords = [];
   bool isLoading = true;
@@ -70,8 +84,18 @@ class _HomePageState extends State<HomePage> {
   bool showHint = false;
   bool filterTodayOnly = false;
   PageController? _pageController;
-  bool infiniteLoop = false;
-  bool isLoopJumping = false; // 무한루프 jump 중인지 플래그
+  bool infiniteLoop = true; // Default: 항상 무한루프 ON
+  String _sortType = '최신순';
+  bool _showFavoritesOnly = false;
+
+  // 실제 단어 인덱스 -> PageView 인덱스 변환
+  int realToPageIdx(int realIdx, int listLen) => realIdx + 1;
+  // PageView 인덱스 -> 실제 단어 인덱스 변환
+  int pageToRealIdx(int pageIdx, int listLen) {
+    if (pageIdx == 0) return listLen - 1;
+    if (pageIdx == listLen + 1) return 0;
+    return pageIdx - 1;
+  }
 
   @override
   void initState() {
@@ -82,7 +106,24 @@ class _HomePageState extends State<HomePage> {
     _loadDeviceId();
     _fetchWords();
     _loadHintState();
-    _pageController = PageController(initialPage: currentIndex);
+    _pageController = PageController(initialPage: 1);
+    currentIndex = 0;
+    // 진단용 로그: 앱 실행 시 words, favoritesBox 상태 출력
+    Future.delayed(const Duration(seconds: 2), () {
+      if (kDebugMode) {
+        debugPrint('==== [앱 실행 시 진단 로그] ====');
+        debugPrint('words 리스트:');
+        for (final w in words) {
+          debugPrint('  word: \'${w['word']}\', partOfSpeech: \'${w['partOfSpeech']}\', meaning: \'${w['meaning']}\'');
+        }
+        debugPrint('favoritesBox keys: ${favoritesBox.keys}');
+        debugPrint('favoritesBox values:');
+        for (final k in favoritesBox.keys) {
+          debugPrint('  $k: ${favoritesBox.get(k)}');
+        }
+        debugPrint('============================');
+      }
+    });
   }
 
   @override
@@ -578,46 +619,62 @@ class _HomePageState extends State<HomePage> {
   void _showFilterDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('필터/정렬'),
-        content: const Text('필터/정렬 기능은 추후 구현 예정입니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('닫기'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text('필터/정렬'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 정렬 옵션
+              Row(
+                children: [
+                  const Text('정렬: '),
+                  DropdownButton<String>(
+                    value: _sortType,
+                    items: const [
+                      DropdownMenuItem(value: '최신순', child: Text('최신순')),
+                      DropdownMenuItem(value: '가나다순', child: Text('가나다순')),
+                    ],
+                    onChanged: (v) {
+                      setStateDialog(() => _sortType = v!);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 즐겨찾기만 보기
+              CheckboxListTile(
+                value: _showFavoritesOnly,
+                onChanged: (v) {
+                  setStateDialog(() => _showFavoritesOnly = v!);
+                },
+                title: const Text('즐겨찾기만 보기'),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('닫기'),
+            ),
+            FilledButton(
+              onPressed: () {
+                setState(() {}); // 다이얼로그 닫고 필터 적용
+                Navigator.pop(ctx);
+              },
+              child: const Text('적용'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // 무한루프 경계 스와이프 시 jumpToPage
-  void jumpToEdgePage(ScrollMetrics position, double value) {
-    final list = filterTodayOnly ? todayWords : words;
-    if (!infiniteLoop || list.length <= 1 || _pageController == null) return;
-    if (position.pixels <= position.minScrollExtent && value < position.pixels) {
-      // 맨 앞에서 오른쪽(이전) 스와이프 → 마지막 페이지로 animate
-      Future.microtask(() {
-        _pageController?.animateToPage(
-          list.length - 1,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.ease,
-        );
-      });
-    } else if (position.pixels >= position.maxScrollExtent && value > position.pixels) {
-      // 맨 뒤에서 왼쪽(다음) 스와이프 → 첫 페이지로 animate
-      Future.microtask(() {
-        _pageController?.animateToPage(
-          0,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.ease,
-        );
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    debugPrint('[HomePage] build 호출, _selectedTab=$_selectedTab');
     if (isLoading) {
       return Scaffold(
         body: Center(
@@ -745,8 +802,79 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     }
-    final list = filterTodayOnly ? todayWords : words;
-    if (list.isEmpty) {
+    if (_selectedTab == 0) {
+      final rawList = filterTodayOnly ? todayWords : words;
+      List<Map<String, dynamic>> list = List.from(rawList);
+      if (_showFavoritesOnly) {
+        list = list.where((w) => isFavoriteWord(w['word'] as String? ?? '')).toList();
+      }
+      if (_sortType == '가나다순') {
+        list.sort((a, b) => (a['word'] as String).compareTo(b['word'] as String));
+      } else {
+        // 최신순: input_timestamp 내림차순
+        list.sort((a, b) {
+          final at = a['input_timestamp'];
+          final bt = b['input_timestamp'];
+          if (at is DateTime && bt is DateTime) return bt.compareTo(at);
+          if (at is Timestamp && bt is Timestamp) return bt.toDate().compareTo(at.toDate());
+          return 0;
+        });
+      }
+      if (list.isEmpty) {
+        return Scaffold(
+          appBar: AppBar(
+            title: GestureDetector(
+              onTap: _onTitleTap,
+              child: Text(
+                'SominWord',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+              ),
+            ),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.today),
+                onPressed: _toggleTodayWords,
+                tooltip: '오늘의 단어',
+              ),
+            ],
+          ),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  filterTodayOnly ? Icons.today : Icons.book,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  filterTodayOnly ? '오늘의 단어가 없습니다.' : '등록된 단어가 없습니다.',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  filterTodayOnly 
+                      ? '관리자 페이지에서 오늘의 단어를 추가해보세요.'
+                      : '관리자 페이지에서 단어를 추가해보세요.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return Scaffold(
         appBar: AppBar(
           title: GestureDetector(
@@ -763,296 +891,325 @@ class _HomePageState extends State<HomePage> {
           elevation: 0,
           actions: [
             IconButton(
-              icon: const Icon(Icons.today),
-              onPressed: _toggleTodayWords,
-              tooltip: '오늘의 단어',
+              icon: const Icon(Icons.add),
+              onPressed: _showAddWordDialog,
+              tooltip: '단어 추가',
+            ),
+            IconButton(
+              icon: const Icon(Icons.filter_list),
+              onPressed: _showFilterDialog,
+              tooltip: '필터/정렬',
+            ),
+            IconButton(
+              icon: const Icon(Icons.calendar_today),
+              onPressed: _showCalendarDialog,
+              tooltip: '달력',
             ),
           ],
+          bottom: null,
         ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                filterTodayOnly ? Icons.today : Icons.book,
-                size: 64,
-                color: Theme.of(context).colorScheme.outline,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                filterTodayOnly ? '오늘의 단어가 없습니다.' : '등록된 단어가 없습니다.',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                filterTodayOnly 
-                    ? '관리자 페이지에서 오늘의 단어를 추가해보세요.'
-                    : '관리자 페이지에서 단어를 추가해보세요.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    return Scaffold(
-      appBar: AppBar(
-        title: GestureDetector(
-          onTap: _onTitleTap,
-          child: Text(
-            'SominWord',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onPrimary,
-            ),
-          ),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showAddWordDialog,
-            tooltip: '단어 추가',
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterDialog,
-            tooltip: '필터/정렬',
-          ),
-          PopupMenuButton<StudyMode>(
-            icon: const Icon(Icons.menu_book),
-            tooltip: '학습 모드',
-            onSelected: (StudyMode newMode) {
-              setState(() => mode = newMode);
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: StudyMode.normal,
-                child: Row(
-                  children: [Icon(Icons.visibility), SizedBox(width: 8), Text('일반 모드')],
-                ),
-              ),
-              const PopupMenuItem(
-                value: StudyMode.hideMeaning,
-                child: Row(
-                  children: [Icon(Icons.visibility_off), SizedBox(width: 8), Text('뜻 가리기')],
-                ),
-              ),
-              const PopupMenuItem(
-                value: StudyMode.hideWord,
-                child: Row(
-                  children: [Icon(Icons.visibility_off), SizedBox(width: 8), Text('영단어 가리기')],
-                ),
-              ),
-              const PopupMenuItem(
-                value: StudyMode.randomHide,
-                child: Row(
-                  children: [Icon(Icons.shuffle), SizedBox(width: 8), Text('랜덤 가리기')],
-                ),
-              ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.calendar_today),
-            onPressed: _showCalendarDialog,
-            tooltip: '달력',
-          ),
-        ],
-        bottom: null,
-      ),
-      body: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_selectedTab == 0)
-            ProgressIndicatorBar(
-              currentIndex: currentIndex,
-              total: list.length,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          Expanded(
-            child: _selectedTab == 0
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(flex: 2),
-                      Align(
-                        alignment: const Alignment(0, -0.4),
-                        child: SizedBox(
-                          width: 340,
-                          height: 440,
-                          child: PageView.builder(
-                            controller: _pageController,
-                            itemCount: list.length,
-                            physics: CustomPageViewScrollPhysics(onOverScroll: jumpToEdgePage),
-                            onPageChanged: (idx) {
-                              setState(() {
-                                prevIndex = currentIndex;
-                                currentIndex = idx;
-                                revealedWordIndexes.clear();
-                                revealedMeaningIndexes.clear();
-                              });
-                              _hideHint();
-                            },
-                            itemBuilder: (context, idx) {
-                              final word = list[idx]['word'] as String? ?? '';
-                              final partOfSpeech = list[idx]['partOfSpeech'] as String? ?? '';
-                              final meaning = list[idx]['meaning'] as String? ?? '';
-                              return WordCard(
-                                word: word,
-                                partOfSpeech: partOfSpeech,
-                                meaning: meaning,
-                                idx: idx,
-                                isSpeaking: isSpeaking,
-                                isFavorite: isFavoriteWord(word),
-                                hideWord: mode == StudyMode.hideWord || mode == StudyMode.randomHide,
-                                hideMeaning: mode == StudyMode.hideMeaning || mode == StudyMode.randomHide,
-                                revealedWord: revealedWordIndexes.contains(idx),
-                                revealedMeaning: revealedMeaningIndexes.contains(idx),
-                                onSpeak: () => _speak(word),
-                                onToggleFavorite: () => toggleFavorite(word),
-                                onRevealWord: () => revealWord(idx),
-                                onRevealMeaning: () => revealMeaning(idx),
-                                showHint: showHint && idx == currentIndex,
-                                infiniteLoop: infiniteLoop,
-                                onToggleInfiniteLoop: () {
-                                  setState(() {
-                                    infiniteLoop = !infiniteLoop;
-                                  });
-                                },
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(
+              child: _selectedTab == 0
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Spacer(flex: 2),
+                        // INDEX(페이지네이션) 표시: 상단바와 카드 사이
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Builder(
+                            builder: (context) {
+                              final width = MediaQuery.of(context).size.width;
+                              final fontSize = width * 0.07; // 화면 너비의 7%로, 기존보다 약간 더 크게
+                              return Text(
+                                list.isEmpty ? '' : '${currentIndex + 1} / ${list.length}',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: fontSize,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               );
                             },
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            ModeButton(
-                              icon: Icons.visibility,
-                              label: '일반',
-                              selected: mode == StudyMode.normal,
-                              onTap: () => setState(() => mode = StudyMode.normal),
-                            ),
-                            ModeButton(
-                              icon: Icons.visibility_off,
-                              label: '뜻 가리기',
-                              selected: mode == StudyMode.hideMeaning,
-                              onTap: () => setState(() => mode = StudyMode.hideMeaning),
-                            ),
-                            ModeButton(
-                              icon: Icons.text_fields,
-                              label: '영단어',
-                              selected: mode == StudyMode.hideWord,
-                              onTap: () => setState(() => mode = StudyMode.hideWord),
-                            ),
-                            ModeButton(
-                              icon: Icons.shuffle,
-                              label: '랜덤',
-                              selected: mode == StudyMode.randomHide,
-                              onTap: () => setState(() => mode = StudyMode.randomHide),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Spacer(flex: 3),
-                    ],
-                  )
-                : _selectedTab == 1
-                    ? Center(child: Text('Quiz 화면 (추후 구현)', style: TextStyle(fontSize: 20)))
-                    : Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 24),
-                            Text('즐겨찾기 단어', style: Theme.of(context).textTheme.headlineMedium),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: Builder(
-                                builder: (context) {
-                                  final favoriteWords = words
-                                      .where((w) => isFavoriteWord(w['word'] as String? ?? ''))
-                                      .toList();
-                                  if (favoriteWords.isEmpty) {
-                                    return Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.star_border, size: 48, color: Theme.of(context).colorScheme.outline),
-                                          const SizedBox(height: 16),
-                                          Text('즐겨찾기한 단어가 없습니다.',
-                                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
+                        Align(
+                          alignment: const Alignment(0, -0.4),
+                          child: Stack(
+                            children: [
+                              SizedBox(
+                                width: 340,
+                                height: 440,
+                                child: Swiper(
+                                  itemBuilder: (BuildContext context, int idx) {
+                                    final word = list[idx]['word'] as String? ?? '';
+                                    final partOfSpeech = list[idx]['partOfSpeech'] as String? ?? '';
+                                    final meaning = list[idx]['meaning'] as String? ?? '';
+                                    return WordCard(
+                                      word: word,
+                                      partOfSpeech: partOfSpeech,
+                                      meaning: meaning,
+                                      idx: idx,
+                                      isSpeaking: isSpeaking,
+                                      isFavorite: isFavoriteWord(word),
+                                      hideWord: mode == StudyMode.hideWord || mode == StudyMode.randomHide,
+                                      hideMeaning: mode == StudyMode.hideMeaning || mode == StudyMode.randomHide,
+                                      revealedWord: revealedWordIndexes.contains(idx),
+                                      revealedMeaning: revealedMeaningIndexes.contains(idx),
+                                      onSpeak: () => _speak(word),
+                                      onToggleFavorite: () => toggleFavorite(word),
+                                      onRevealWord: () => revealWord(idx),
+                                      onRevealMeaning: () => revealMeaning(idx),
+                                      showHint: showHint && idx == currentIndex,
+                                      loopButton: IconButton(
+                                        icon: Icon(infiniteLoop ? Icons.lock : Icons.lock_open),
+                                        tooltip: infiniteLoop ? '무한반복 ON' : '무한반복 OFF',
+                                        onPressed: () {
+                                          setState(() {
+                                            infiniteLoop = !infiniteLoop;
+                                          });
+                                        },
                                       ),
                                     );
-                                  }
-                                  return ListView.builder(
-                                    itemCount: favoriteWords.length,
-                                    itemBuilder: (context, idx) {
-                                      final w = favoriteWords[idx];
-                                      return Card(
-                                        margin: const EdgeInsets.symmetric(vertical: 4),
-                                        child: ListTile(
-                                          leading: const Icon(Icons.star, color: Colors.amber),
-                                          title: Text(
-                                            w['word'] ?? '',
-                                            style: const TextStyle(fontWeight: FontWeight.bold),
-                                          ),
-                                          subtitle: Text('${w['partOfSpeech']} / ${w['meaning']}'),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
+                                  },
+                                  itemCount: list.length,
+                                  loop: infiniteLoop,
+                                  index: currentIndex,
+                                  onIndexChanged: (idx) {
+                                    setState(() {
+                                      prevIndex = currentIndex;
+                                      currentIndex = idx;
+                                      revealedWordIndexes.clear();
+                                      revealedMeaningIndexes.clear();
+                                    });
+                                    _hideHint();
+                                  },
+                                  control: const SwiperControl(),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: SafeArea(
-        child: BottomNavigationBar(
-          currentIndex: _selectedTab,
-          onTap: (idx) {
-            setState(() {
-              _selectedTab = idx;
-            });
-          },
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.grid_view),
-              label: '단어장',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.quiz),
-              label: 'Quiz',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.star),
-              label: '즐겨찾기',
+                        const SizedBox(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              ModeButton(
+                                icon: Icons.visibility,
+                                label: '일반',
+                                selected: mode == StudyMode.normal,
+                                onTap: () => setState(() => mode = StudyMode.normal),
+                              ),
+                              ModeButton(
+                                icon: Icons.visibility_off,
+                                label: '뜻 가리기',
+                                selected: mode == StudyMode.hideMeaning,
+                                onTap: () => setState(() => mode = StudyMode.hideMeaning),
+                              ),
+                              ModeButton(
+                                icon: Icons.text_fields,
+                                label: '영단어',
+                                selected: mode == StudyMode.hideWord,
+                                onTap: () => setState(() => mode = StudyMode.hideWord),
+                              ),
+                              ModeButton(
+                                icon: Icons.shuffle,
+                                label: '랜덤',
+                                selected: mode == StudyMode.randomHide,
+                                onTap: () => setState(() => mode = StudyMode.randomHide),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Spacer(flex: 3),
+                      ],
+                    )
+                  : _selectedTab == 1
+                      ? const QuizPage()
+                      : Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 24),
+                              Text('즐겨찾기 단어', style: Theme.of(context).textTheme.headlineMedium),
+                              const SizedBox(height: 16),
+                              Expanded(
+                                child: Builder(
+                                  builder: (context) {
+                                    debugPrint('[HomePage] 즐겨찾기 Builder 진입');
+                                    List<Map<String, dynamic>> favList = List.from(words);
+                                    if (_sortType == '가나다순') {
+                                      favList.sort((a, b) => (a['word'] as String).compareTo(b['word'] as String));
+                                    } else {
+                                      favList.sort((a, b) {
+                                        final at = a['input_timestamp'];
+                                        final bt = b['input_timestamp'];
+                                        if (at is DateTime && bt is DateTime) return bt.compareTo(at);
+                                        if (at is Timestamp && bt is Timestamp) return bt.toDate().compareTo(at.toDate());
+                                        return 0;
+                                      });
+                                    }
+                                    favList = favList.where((w) => isFavoriteWord(w['word'] as String? ?? '')).toList();
+                                    if (kDebugMode) {
+                                      debugPrint('==== [즐겨찾기 탭 진입 시 진단 로그] ====');
+                                      debugPrint('words 리스트:');
+                                      for (final w in words) {
+                                        debugPrint('  word: \'${w['word']}\', partOfSpeech: \'${w['partOfSpeech']}\', meaning: \'${w['meaning']}\'');
+                                      }
+                                      debugPrint('favoritesBox keys:');
+                                      debugPrint(favoritesBox.keys.toString());
+                                      debugPrint('favoritesBox values:');
+                                      for (final k in favoritesBox.keys) {
+                                        debugPrint('  $k: ${favoritesBox.get(k)}');
+                                      }
+                                      debugPrint('즐겨찾기 필터 결과(favList):');
+                                      for (final w in favList) {
+                                        debugPrint('  word: \'${w['word']}\', partOfSpeech: \'${w['partOfSpeech']}\', meaning: \'${w['meaning']}\'');
+                                      }
+                                      debugPrint('============================');
+                                    }
+                                    debugPrint('[HomePage] FavoriteList 반환 직전');
+                                    return FavoriteList(
+                                      favoriteWords: favList,
+                                      isFavoriteWord: isFavoriteWord,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
             ),
           ],
-          selectedItemColor: Colors.deepPurple,
-          unselectedItemColor: Colors.grey,
-          backgroundColor: Colors.white,
-          type: BottomNavigationBarType.fixed,
         ),
-      ),
-    );
+        bottomNavigationBar: SafeArea(
+          child: BottomNavigationBar(
+            currentIndex: _selectedTab,
+            onTap: (idx) {
+              setState(() {
+                _selectedTab = idx;
+                debugPrint('[HomePage] _selectedTab 변경: $_selectedTab');
+              });
+            },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.grid_view),
+                label: '단어장',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.quiz),
+                label: 'Quiz',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.star),
+                label: '즐겨찾기',
+              ),
+            ],
+            selectedItemColor: Colors.deepPurple,
+            unselectedItemColor: Colors.grey,
+            backgroundColor: Colors.white,
+            type: BottomNavigationBarType.fixed,
+          ),
+        ),
+      );
+    } else if (_selectedTab == 1) {
+      // 퀴즈 탭: QuizPage 위젯 연결
+      return const QuizPage();
+    } else {
+      // 즐겨찾기 탭
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('즐겨찾기 단어'),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              Text('즐겨찾기 단어', style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    debugPrint('[HomePage] 즐겨찾기 Builder 진입');
+                    List<Map<String, dynamic>> favList = List.from(words);
+                    if (_sortType == '가나다순') {
+                      favList.sort((a, b) => (a['word'] as String).compareTo(b['word'] as String));
+                    } else {
+                      favList.sort((a, b) {
+                        final at = a['input_timestamp'];
+                        final bt = b['input_timestamp'];
+                        if (at is DateTime && bt is DateTime) return bt.compareTo(at);
+                        if (at is Timestamp && bt is Timestamp) return bt.toDate().compareTo(at.toDate());
+                        return 0;
+                      });
+                    }
+                    favList = favList.where((w) => isFavoriteWord(w['word'] as String? ?? '')).toList();
+                    if (kDebugMode) {
+                      debugPrint('==== [즐겨찾기 탭 진입 시 진단 로그] ====');
+                      debugPrint('words 리스트:');
+                      for (final w in words) {
+                        debugPrint('  word: \'${w['word']}\', partOfSpeech: \'${w['partOfSpeech']}\', meaning: \'${w['meaning']}\'');
+                      }
+                      debugPrint('favoritesBox keys:');
+                      debugPrint(favoritesBox.keys.toString());
+                      debugPrint('favoritesBox values:');
+                      for (final k in favoritesBox.keys) {
+                        debugPrint('  $k: ${favoritesBox.get(k)}');
+                      }
+                      debugPrint('즐겨찾기 필터 결과(favList):');
+                      for (final w in favList) {
+                        debugPrint('  word: \'${w['word']}\', partOfSpeech: \'${w['partOfSpeech']}\', meaning: \'${w['meaning']}\'');
+                      }
+                      debugPrint('============================');
+                    }
+                    debugPrint('[HomePage] FavoriteList 반환 직전');
+                    return FavoriteList(
+                      favoriteWords: favList,
+                      isFavoriteWord: isFavoriteWord,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          child: BottomNavigationBar(
+            currentIndex: _selectedTab,
+            onTap: (idx) {
+              setState(() {
+                _selectedTab = idx;
+                debugPrint('[HomePage] _selectedTab 변경: $_selectedTab');
+              });
+            },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.grid_view),
+                label: '단어장',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.quiz),
+                label: 'Quiz',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.star),
+                label: '즐겨찾기',
+              ),
+            ],
+            selectedItemColor: Colors.deepPurple,
+            unselectedItemColor: Colors.grey,
+            backgroundColor: Colors.white,
+            type: BottomNavigationBarType.fixed,
+          ),
+        ),
+      );
+    }
   }
 }
