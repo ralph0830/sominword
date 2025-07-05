@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class QuizPage extends StatefulWidget {
   final bool showAppBar;
@@ -13,6 +14,8 @@ class QuizPage extends StatefulWidget {
 
 class _QuizPageState extends State<QuizPage> {
   final FlutterTts _flutterTts = FlutterTts();
+  late stt.SpeechToText _speech;
+  bool _speechAvailable = false;
   bool _isListening = false;
   String _lastWords = '';
   String _currentWord = '';
@@ -32,6 +35,7 @@ class _QuizPageState extends State<QuizPage> {
   void initState() {
     super.initState();
     _initTts();
+    _initSpeech();
     _loadWords();
   }
 
@@ -39,6 +43,23 @@ class _QuizPageState extends State<QuizPage> {
     await _flutterTts.setLanguage('en-US');
     await _flutterTts.setPitch(1.0);
     await _flutterTts.setSpeechRate(0.8);
+  }
+
+  Future<void> _initSpeech() async {
+    _speech = stt.SpeechToText();
+    _speechAvailable = await _speech.initialize(
+      onStatus: (status) {
+        if (kDebugMode) debugPrint('Speech status: $status');
+        if (status == 'done' || status == 'notListening') {
+          setState(() => _isListening = false);
+        }
+      },
+      onError: (err) {
+        if (kDebugMode) debugPrint('Speech error: $err');
+        setState(() => _isListening = false);
+      },
+    );
+    setState(() {});
   }
 
   Future<void> _loadWords() async {
@@ -204,6 +225,30 @@ class _QuizPageState extends State<QuizPage> {
     }
   }
 
+  void _startListening() async {
+    if (!_speechAvailable) return;
+    setState(() => _isListening = true);
+    await _speech.listen(
+      onResult: (result) {
+        setState(() {
+          _lastWords = result.recognizedWords;
+          _textController.text = _lastWords;
+        });
+      },
+      localeId: 'en_US',
+      listenMode: stt.ListenMode.confirmation,
+    );
+  }
+
+  void _stopListening() async {
+    if (!_speechAvailable) return;
+    await _speech.stop();
+    setState(() => _isListening = false);
+    if (_lastWords.trim().isNotEmpty) {
+      _checkAnswer();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget quizBody;
@@ -320,15 +365,15 @@ class _QuizPageState extends State<QuizPage> {
             ] else ...[
               // 모바일용 음성 인식 버튼
               GestureDetector(
-                onTapDown: (_) => setState(() => _isListening = true),
-                onTapUp: (_) => setState(() => _isListening = false),
-                onTapCancel: () => setState(() => _isListening = false),
+                onTapDown: (_) => _startListening(),
+                onTapUp: (_) => _stopListening(),
+                onTapCancel: () => _stopListening(),
                 child: Container(
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _isListening ? Colors.red : Colors.blue,
+                    color: _isListening ? Colors.red : (_speechAvailable ? Colors.blue : Colors.grey),
                   ),
                   child: Icon(
                     _isListening ? Icons.mic : Icons.mic_none,
@@ -339,7 +384,9 @@ class _QuizPageState extends State<QuizPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                _isListening ? '말씀해주세요...' : '마이크를 길게 눌러 발음하세요',
+                !_speechAvailable
+                  ? '음성인식 사용 불가(권한 또는 기기 미지원)'
+                  : (_isListening ? '말씀하세요...' : '마이크를 길게 눌러 발음하세요'),
                 style: const TextStyle(fontSize: 16),
               ),
             ],
