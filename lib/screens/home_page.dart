@@ -1029,7 +1029,41 @@ class _HomePageState extends State<HomePage> {
                       ],
                     )
                   : _selectedTab == 1
-                      ? const QuizPage()
+                      ? Scaffold(
+                          appBar: AppBar(
+                            title: const Text('발음 퀴즈'),
+                          ),
+                          body: const QuizPage(),
+                          bottomNavigationBar: SafeArea(
+                            child: BottomNavigationBar(
+                              currentIndex: _selectedTab,
+                              onTap: (idx) {
+                                setState(() {
+                                  _selectedTab = idx;
+                                  debugPrint('[HomePage] _selectedTab 변경: $_selectedTab');
+                                });
+                              },
+                              items: const [
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.grid_view),
+                                  label: '단어장',
+                                ),
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.quiz),
+                                  label: 'Quiz',
+                                ),
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.star),
+                                  label: '즐겨찾기',
+                                ),
+                              ],
+                              selectedItemColor: Colors.deepPurple,
+                              unselectedItemColor: Colors.grey,
+                              backgroundColor: Colors.white,
+                              type: BottomNavigationBarType.fixed,
+                            ),
+                          ),
+                        )
                       : Padding(
                           padding: const EdgeInsets.all(24),
                           child: Column(
@@ -1118,8 +1152,42 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } else if (_selectedTab == 1) {
-      // 퀴즈 탭: QuizPage 위젯 연결
-      return const QuizPage();
+      // 퀴즈 탭: QuizPage를 body로, 하단 네비게이션 바 포함
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('발음 퀴즈'),
+        ),
+        body: const QuizPage(),
+        bottomNavigationBar: SafeArea(
+          child: BottomNavigationBar(
+            currentIndex: _selectedTab,
+            onTap: (idx) {
+              setState(() {
+                _selectedTab = idx;
+                debugPrint('[HomePage] _selectedTab 변경: $_selectedTab');
+              });
+            },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.grid_view),
+                label: '단어장',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.quiz),
+                label: 'Quiz',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.star),
+                label: '즐겨찾기',
+              ),
+            ],
+            selectedItemColor: Colors.deepPurple,
+            unselectedItemColor: Colors.grey,
+            backgroundColor: Colors.white,
+            type: BottomNavigationBarType.fixed,
+          ),
+        ),
+      );
     } else {
       // 즐겨찾기 탭
       return Scaffold(
