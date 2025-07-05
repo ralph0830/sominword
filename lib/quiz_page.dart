@@ -3,6 +3,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_to_text.dart';
 
 class QuizPage extends StatefulWidget {
   final bool showAppBar;
@@ -236,7 +237,7 @@ class _QuizPageState extends State<QuizPage> {
         });
       },
       localeId: 'en_US',
-      listenMode: stt.ListenMode.confirmation,
+      listenMode: ListenMode.confirmation,
     );
   }
 
