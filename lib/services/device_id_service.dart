@@ -27,7 +27,7 @@ class DeviceIdService {
         debugPrint('[DeviceIdService][flutter_udid][오류] $e, fallback UUID: $deviceId');
       }
     }
-    await prefs.setString(_deviceIdKey, deviceId);
+      await prefs.setString(_deviceIdKey, deviceId);
     debugPrint('[DeviceIdService] SharedPreferences에 device_id 저장(덮어씀): $deviceId');
     return deviceId;
   }

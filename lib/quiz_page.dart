@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class QuizPage extends StatefulWidget {
   final bool showAppBar;
-  const QuizPage({super.key, this.showAppBar = true});
+  final List<Map<String, dynamic>> words;
+  const QuizPage({super.key, this.showAppBar = true, required this.words});
 
   @override
   State<QuizPage> createState() => _QuizPageState();
 }
 
 class _QuizPageState extends State<QuizPage> {
-  final FlutterTts _flutterTts = FlutterTts();
   late stt.SpeechToText _speech;
   bool _speechAvailable = false;
   bool _isListening = false;
@@ -36,15 +35,8 @@ class _QuizPageState extends State<QuizPage> {
   @override
   void initState() {
     super.initState();
-    _initTts();
     _initSpeech();
-    _loadWords();
-  }
-
-  Future<void> _initTts() async {
-    await _flutterTts.setLanguage('en-US');
-    await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.8);
+    _initQuizWords();
   }
 
   Future<void> _initSpeech() async {
@@ -64,35 +56,73 @@ class _QuizPageState extends State<QuizPage> {
     setState(() {});
   }
 
-  Future<void> _loadWords() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('words')
-          .orderBy('input_timestamp', descending: true)
-          .limit(20) // 퀴즈용으로 20개 단어만 로드
-          .get(const GetOptions(source: Source.serverAndCache));
-      
-      _words = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'word': data['english_word'] ?? '',
-          'partOfSpeech': data['korean_part_of_speech'] ?? '',
-          'meaning': data['korean_meaning'] ?? '',
-        };
-      }).toList();
-      
-      if (_words.isNotEmpty) {
-        _setCurrentWord();
+  void _initQuizWords() {
+    final allWords = List<Map<String, dynamic>>.from(widget.words);
+    if (allWords.isEmpty) {
+      setState(() {
+        _words = [];
+        _isLoading = false;
+      });
+      return;
+    }
+    allWords.sort((a, b) {
+      final at = a['input_timestamp'];
+      final bt = b['input_timestamp'];
+      DateTime ad, bd;
+      if (at is DateTime) {
+        ad = at;
+      } else if (at is Timestamp) {
+        ad = at.toDate();
+      } else {
+        ad = DateTime(2000);
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error loading words: $e');
+      if (bt is DateTime) {
+        bd = bt;
+      } else if (bt is Timestamp) {
+        bd = bt.toDate();
+      } else {
+        bd = DateTime(2000);
+      }
+      return bd.compareTo(ad);
+    });
+    List<Map<String, dynamic>> weighted = [];
+    for (int i = 0; i < allWords.length; i++) {
+      int weight = 1;
+      if (i < 5) {
+        weight = 3;
+      } else if (i < 10) weight = 2;
+      for (int j = 0; j < weight; j++) {
+        weighted.add(allWords[i]);
       }
     }
-    
+    weighted.shuffle();
+    final Set<String> used = {};
+    List<Map<String, dynamic>> quizWords = [];
+    for (final w in weighted) {
+      final key = (w['word'] ?? '') + (w['meaning'] ?? '');
+      if (!used.contains(key)) {
+        quizWords.add(w);
+        used.add(key);
+      }
+      if (quizWords.length >= 20) break;
+    }
+    if (quizWords.length < 20) {
+      for (final w in allWords) {
+        final key = (w['word'] ?? '') + (w['meaning'] ?? '');
+        if (!used.contains(key)) {
+          quizWords.add(w);
+          used.add(key);
+        }
+        if (quizWords.length >= 20) break;
+      }
+    }
     setState(() {
+      _words = quizWords;
       _isLoading = false;
     });
+    if (quizWords.isNotEmpty) {
+      _setCurrentWord();
+    }
   }
 
   void _setCurrentWord() {
@@ -109,11 +139,9 @@ class _QuizPageState extends State<QuizPage> {
     
     bool isCorrect = false;
     
-    // 정확한 매칭 또는 유사한 발음 허용
     if (userAnswer == correctAnswer) {
       isCorrect = true;
     } else {
-      // 유사한 발음 체크 (간단한 유사도 검사)
       isCorrect = _checkSimilarity(userAnswer, correctAnswer);
     }
 
@@ -128,7 +156,6 @@ class _QuizPageState extends State<QuizPage> {
       _showFeedback = true;
     });
 
-    // 2초 후 다음 문제로
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         _nextQuestion();
@@ -137,19 +164,17 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   bool _checkSimilarity(String userAnswer, String correctAnswer) {
-    // 간단한 유사도 검사 (실제로는 더 정교한 알고리즘 사용 가능)
     if (userAnswer.length < 3 || correctAnswer.length < 3) {
       return userAnswer == correctAnswer;
     }
     
-    // 레벤슈타인 거리 기반 유사도
     int distance = _levenshteinDistance(userAnswer, correctAnswer);
     int maxLength = userAnswer.length > correctAnswer.length 
         ? userAnswer.length 
         : correctAnswer.length;
     
     double similarity = 1.0 - (distance / maxLength);
-    return similarity >= 0.7; // 70% 이상 유사하면 정답으로 인정
+    return similarity >= 0.7;
   }
 
   int _levenshteinDistance(String s1, String s2) {
@@ -214,10 +239,6 @@ class _QuizPageState extends State<QuizPage> {
     _setCurrentWord();
   }
 
-  Future<void> _playWord() async {
-    await _flutterTts.speak(_currentWord);
-  }
-
   void _submitAnswer() {
     if (_textController.text.trim().isNotEmpty) {
       setState(() {
@@ -254,7 +275,6 @@ class _QuizPageState extends State<QuizPage> {
     var status = await Permission.microphone.status;
     if (status.isGranted) return true;
     if (status.isDenied || status.isPermanentlyDenied || status.isRestricted) {
-      // 안내 다이얼로그
       if (context.mounted) {
         showDialog(
           context: context,
@@ -279,13 +299,17 @@ class _QuizPageState extends State<QuizPage> {
       }
       return false;
     }
-    // 최초 요청(neverAskAgain이 아닌 경우)
     var result = await Permission.microphone.request();
     return result.isGranted;
   }
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
+    final safePadding = MediaQuery.of(context).viewPadding;
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    final usableHeight = height - safePadding.top - safePadding.bottom - viewInsets.bottom;
     Widget quizBody;
     if (_isLoading) {
       quizBody = const Center(child: CircularProgressIndicator());
@@ -293,99 +317,117 @@ class _QuizPageState extends State<QuizPage> {
       quizBody = const Center(child: Text('퀴즈할 단어가 없습니다.'));
     } else if (_isQuizComplete) {
       quizBody = Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.celebration, size: 80, color: Colors.amber),
-            const SizedBox(height: 24),
-            Text(
-              '퀴즈 완료!',
-              style: Theme.of(context).textTheme.headlineMedium,
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: usableHeight * 0.8,
             ),
-            const SizedBox(height: 16),
-            Text(
-              '점수: $_score / $_totalQuestions',
-              style: Theme.of(context).textTheme.headlineSmall,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(height: usableHeight * 0.05),
+                const Icon(Icons.celebration, size: 80, color: Colors.amber),
+                SizedBox(height: usableHeight * 0.03),
+                Text(
+                  '퀴즈 완료!',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                SizedBox(height: usableHeight * 0.02),
+                Text(
+                  '점수: [38;5;2m$_score[0m / $_totalQuestions',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                SizedBox(height: usableHeight * 0.03),
+                SizedBox(
+                  width: width * 0.7,
+                  child: ElevatedButton(
+                    onPressed: _restartQuiz,
+                    child: const Text('다시 시작'),
+                  ),
+                ),
+                SizedBox(height: usableHeight * 0.02),
+                SizedBox(
+                  width: width * 0.7,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('돌아가기'),
+                  ),
+                ),
+                SizedBox(height: usableHeight * 0.05),
+              ],
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _restartQuiz,
-              child: const Text('다시 시작'),
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('돌아가기'),
-            ),
-          ],
+          ),
         ),
       );
     } else {
-      quizBody = Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            // 진행률 표시
-            LinearProgressIndicator(
-              value: (_currentIndex + 1) / _words.length,
-              backgroundColor: Colors.grey[300],
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-            ),
-            const SizedBox(height: 24),
-            // 점수 표시
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('점수: $_score', style: const TextStyle(fontSize: 18)),
-                Text('정답률: ${_totalQuestions > 0 ? ((_score / _totalQuestions) * 100).round() : 0}%',
-                    style: const TextStyle(fontSize: 18)),
-              ],
-            ),
-            const SizedBox(height: 32),
-            // 문제 카드
-            Card(
-              elevation: 8,
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
+      quizBody = LayoutBuilder(
+        builder: (context, constraints) {
+          final maxH = constraints.maxHeight;
+          return SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: viewInsets.bottom),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: maxH),
+              child: IntrinsicHeight(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('이 단어를 입력하세요:'),
-                        IconButton(
-                          icon: const Icon(Icons.volume_up),
-                          onPressed: _playWord,
-                          tooltip: '정답 발음 듣기',
+                    SizedBox(height: usableHeight * 0.02),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: width * 0.08),
+                      child: LinearProgressIndicator(
+                        value: (_currentIndex + 1) / _words.length,
+                        backgroundColor: Colors.grey[300],
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                        minHeight: usableHeight * 0.012,
+                      ),
+                    ),
+                    SizedBox(height: usableHeight * 0.02),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: width * 0.08),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('점수: $_score', style: TextStyle(fontSize: usableHeight * 0.025)),
+                          Text('정답률: ${_totalQuestions > 0 ? ((_score / _totalQuestions) * 100).round() : 0}%',
+                              style: TextStyle(fontSize: usableHeight * 0.025)),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: usableHeight * 0.03),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: width * 0.04),
+                      child: Card(
+                        elevation: 8,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: usableHeight * 0.04,
+                            horizontal: width * 0.04,
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('이 단어를 입력하세요:', style: TextStyle(fontSize: usableHeight * 0.022)),
+                                ],
+                              ),
+                              SizedBox(height: usableHeight * 0.02),
+                              Text(
+                                _currentMeaning,
+                                style: TextStyle(fontSize: usableHeight * 0.035, fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: usableHeight * 0.01),
+                              Text(
+                                _currentPartOfSpeech,
+                                style: TextStyle(fontSize: usableHeight * 0.022, color: Colors.grey),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _currentMeaning,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _currentPartOfSpeech,
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // 마이크 버튼 중앙 배치 (비율 기반 크기)
-            Builder(
-              builder: (context) {
-                final width = MediaQuery.of(context).size.width;
-                final height = MediaQuery.of(context).size.height;
-                final micSize = width * 0.18; // 화면 너비의 18% (예: 320px이면 약 57px)
-                final inputPadding = width * 0.06; // 좌우 패딩 비율
-                final inputSpacing = height * 0.015; // 입력란-버튼 간격
-                return Column(
-                  children: [
+                    SizedBox(height: usableHeight * 0.03),
                     Center(
                       child: GestureDetector(
                         onTapDown: (_) async {
@@ -396,41 +438,45 @@ class _QuizPageState extends State<QuizPage> {
                         onTapUp: (_) => _stopListening(),
                         onTapCancel: () => _stopListening(),
                         child: Container(
-                          width: micSize,
-                          height: micSize,
+                          width: width * 0.18,
+                          height: width * 0.18,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: _isListening ? Colors.red : (_speechAvailable ? Colors.blue : Colors.grey),
                           ),
                           child: Icon(
                             _isListening ? Icons.mic : Icons.mic_none,
-                            size: micSize * 0.6,
+                            size: width * 0.11,
                             color: Colors.white,
                           ),
                         ),
                       ),
                     ),
-                    SizedBox(height: inputSpacing * 2),
+                    SizedBox(height: usableHeight * 0.025),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: inputPadding),
+                      padding: EdgeInsets.symmetric(horizontal: width * 0.08),
                       child: Column(
                         children: [
-                          TextField(
-                            controller: _textController,
-                            decoration: const InputDecoration(
-                              labelText: '영어 단어를 입력하거나 마이크로 발음하세요',
-                              border: OutlineInputBorder(),
+                          SizedBox(
+                            height: usableHeight * 0.07,
+                            child: TextField(
+                              controller: _textController,
+                              decoration: const InputDecoration(
+                                labelText: '영어 단어를 입력하거나 마이크로 발음하세요',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (v) {
+                                setState(() {
+                                  _lastWords = v;
+                                });
+                              },
+                              onTap: () {},
                             ),
-                            onChanged: (v) {
-                              setState(() {
-                                _lastWords = v;
-                              });
-                            },
-                            onTap: () {},
                           ),
-                          SizedBox(height: inputSpacing),
+                          SizedBox(height: usableHeight * 0.015),
                           SizedBox(
                             width: double.infinity,
+                            height: usableHeight * 0.065,
                             child: ElevatedButton(
                               onPressed: _textController.text.trim().isEmpty || _showFeedback ? null : _submitAnswer,
                               child: const Text('제출'),
@@ -439,50 +485,56 @@ class _QuizPageState extends State<QuizPage> {
                         ],
                       ),
                     ),
+                    SizedBox(height: usableHeight * 0.02),
+                    if (_showFeedback)
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: width * 0.08),
+                        child: Container(
+                          padding: EdgeInsets.all(usableHeight * 0.018),
+                          decoration: BoxDecoration(
+                            color: _feedback.contains('정답') ? Colors.green[50] : Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            _feedback,
+                            style: TextStyle(
+                              fontSize: usableHeight * 0.025,
+                              fontWeight: FontWeight.bold,
+                              color: _feedback.contains('정답') ? Colors.green : Colors.red,
+                            ),
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: usableHeight * 0.01),
+                    if (kIsWeb)
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: width * 0.08),
+                        child: Container(
+                          padding: EdgeInsets.all(usableHeight * 0.018),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            '💡 웹에서는 텍스트 입력으로 퀴즈를 진행합니다.\n모바일 앱에서는 음성 인식 기능을 사용할 수 있습니다.',
+                            style: TextStyle(fontSize: 14),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: usableHeight * 0.03),
                   ],
-                );
-              },
+                ),
+              ),
             ),
-            SizedBox(height: MediaQuery.of(context).size.height * 0.02),
-            // 피드백 메시지
-            if (_showFeedback)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _feedback.contains('정답') ? Colors.green[50] : Colors.red[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _feedback,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _feedback.contains('정답') ? Colors.green : Colors.red,
-                  ),
-                ),
-              ),
-            const Spacer(),
-            // 웹에서는 힌트 표시
-            if (kIsWeb)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  '💡 웹에서는 텍스트 입력으로 퀴즈를 진행합니다.\n모바일 앱에서는 음성 인식 기능을 사용할 수 있습니다.',
-                  style: TextStyle(fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-          ],
-        ),
+          );
+        },
       );
     }
 
     if (widget.showAppBar) {
       return Scaffold(
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(
           title: const Text('발음 퀴즈'),
           actions: [
@@ -507,7 +559,6 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   void dispose() {
-    _flutterTts.stop();
     _textController.dispose();
     super.dispose();
   }

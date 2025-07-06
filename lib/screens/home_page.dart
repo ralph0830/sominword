@@ -1167,7 +1167,7 @@ class _HomePageState extends State<HomePage> {
                           appBar: AppBar(
                             title: const Text('발음 퀴즈'),
                           ),
-                          body: const QuizPage(showAppBar: false),
+                          body: QuizPage(showAppBar: false, words: words),
                           bottomNavigationBar: SafeArea(
                             child: BottomNavigationBar(
                               currentIndex: _selectedTab,
@@ -1291,7 +1291,7 @@ class _HomePageState extends State<HomePage> {
         appBar: AppBar(
           title: const Text('발음 퀴즈'),
         ),
-        body: const QuizPage(showAppBar: false),
+        body: QuizPage(showAppBar: false, words: words),
         bottomNavigationBar: SafeArea(
           child: BottomNavigationBar(
             currentIndex: _selectedTab,
