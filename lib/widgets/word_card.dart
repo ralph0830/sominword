@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 
 class WordCard extends StatelessWidget {
   final String word;
@@ -133,7 +134,7 @@ class WordCard extends StatelessWidget {
                       : Center(
                           child: SizedBox(
                             width: double.infinity,
-                            child: Text(
+                            child: AutoSizeText(
                               word,
                               style: Theme.of(context).textTheme.displaySmall?.copyWith(
                                     fontWeight: FontWeight.bold,
@@ -143,6 +144,7 @@ class WordCard extends StatelessWidget {
                                   ) ?? TextStyle(fontSize: wordFontSize, fontWeight: FontWeight.bold),
                               textAlign: TextAlign.center,
                               maxLines: 1,
+                              minFontSize: 16,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),

@@ -248,9 +248,6 @@ class _QuizPageState extends State<QuizPage> {
     if (!_speechAvailable) return;
     await _speech.stop();
     setState(() => _isListening = false);
-    if (_lastWords.trim().isNotEmpty) {
-      _checkAnswer();
-    }
   }
 
   Future<bool> _checkMicPermissionAndRequest(BuildContext context) async {
@@ -379,80 +376,74 @@ class _QuizPageState extends State<QuizPage> {
               ),
             ),
             const SizedBox(height: 32),
-            // 웹용 텍스트 입력
-            if (kIsWeb) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _textController,
-                      decoration: const InputDecoration(
-                        labelText: '영어 단어를 입력하세요',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _submitAnswer(),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: _submitAnswer,
-                    child: const Text('정답 확인'),
-                  ),
-                ],
-              ),
-            ] else ...[
-              // 모바일용 음성 인식 버튼
-              GestureDetector(
-                onTapDown: (_) async {
-                  if (await _checkMicPermissionAndRequest(context)) {
-                    _startListening();
-                  }
-                },
-                onTapUp: (_) => _stopListening(),
-                onTapCancel: () => _stopListening(),
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isListening ? Colors.red : (_speechAvailable ? Colors.blue : Colors.grey),
-                  ),
-                  child: Icon(
-                    _isListening ? Icons.mic : Icons.mic_none,
-                    size: 60,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                !_speechAvailable
-                  ? '음성인식 사용 불가(권한 또는 기기 미지원)'
-                  : (_isListening ? '말씀하세요...' : '마이크를 길게 눌러 발음하세요'),
-                style: const TextStyle(fontSize: 16),
-              ),
-            ],
-            const SizedBox(height: 16),
-            // 입력된 답안 표시
-            if (_lastWords.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
+            // 마이크 버튼 중앙 배치 (비율 기반 크기)
+            Builder(
+              builder: (context) {
+                final width = MediaQuery.of(context).size.width;
+                final height = MediaQuery.of(context).size.height;
+                final micSize = width * 0.18; // 화면 너비의 18% (예: 320px이면 약 57px)
+                final inputPadding = width * 0.06; // 좌우 패딩 비율
+                final inputSpacing = height * 0.015; // 입력란-버튼 간격
+                return Column(
                   children: [
-                    const Text('입력한 답안:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text(
-                      _lastWords,
-                      style: const TextStyle(fontSize: 18, color: Colors.blue),
+                    Center(
+                      child: GestureDetector(
+                        onTapDown: (_) async {
+                          if (await _checkMicPermissionAndRequest(context)) {
+                            _startListening();
+                          }
+                        },
+                        onTapUp: (_) => _stopListening(),
+                        onTapCancel: () => _stopListening(),
+                        child: Container(
+                          width: micSize,
+                          height: micSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _isListening ? Colors.red : (_speechAvailable ? Colors.blue : Colors.grey),
+                          ),
+                          child: Icon(
+                            _isListening ? Icons.mic : Icons.mic_none,
+                            size: micSize * 0.6,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: inputSpacing * 2),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: inputPadding),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _textController,
+                            decoration: const InputDecoration(
+                              labelText: '영어 단어를 입력하거나 마이크로 발음하세요',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (v) {
+                              setState(() {
+                                _lastWords = v;
+                              });
+                            },
+                            onTap: () {},
+                          ),
+                          SizedBox(height: inputSpacing),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _textController.text.trim().isEmpty || _showFeedback ? null : _submitAnswer,
+                              child: const Text('제출'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-              ),
-            const SizedBox(height: 16),
+                );
+              },
+            ),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.02),
             // 피드백 메시지
             if (_showFeedback)
               Container(

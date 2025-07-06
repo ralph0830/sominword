@@ -41,7 +41,6 @@ class FirebaseService {
         'koreanPartOfSpeech': '명사',
         'koreanMeaning': '사과',
         'inputTimestamp': FieldValue.serverTimestamp(),
-        'isFavorite': false,
       });
     } else {
       // 이미 등록된 경우, lastActiveAt만 갱신
@@ -77,7 +76,6 @@ class FirebaseService {
       'koreanPartOfSpeech': koreanPartOfSpeech,
       'koreanMeaning': koreanMeaning,
       'inputTimestamp': FieldValue.serverTimestamp(),
-      'isFavorite': false,
     });
   }
 
@@ -128,20 +126,16 @@ class FirebaseService {
 
   /// 즐겨찾기 상태를 토글합니다.
   Future<void> toggleFavorite(String wordId, bool isFavorite) async {
-    final wordsPath = await _deviceWordsPath;
-    await _firestore.collection(wordsPath).doc(wordId).update({
-      'isFavorite': isFavorite,
-    });
+    // Firestore에 저장하지 않음. Hive에서만 관리
+    // 이 함수는 더 이상 사용하지 않거나, 빈 함수로 둡니다.
+    return;
   }
 
   /// 즐겨찾기 단어만 가져옵니다.
   Stream<QuerySnapshot> getFavoriteWordsStream() async* {
-    final wordsPath = await _deviceWordsPath;
-    yield* _firestore
-        .collection(wordsPath)
-        .where('isFavorite', isEqualTo: true)
-        .orderBy('inputTimestamp', descending: true)
-        .snapshots();
+    // Firestore에서 즐겨찾기 단어만 가져오는 기능은 제거 (Hive에서만 관리)
+    // 필요하다면 전체 단어를 불러와서 Hive에서 필터링
+    yield* const Stream.empty();
   }
 
   /// 특정 날짜의 단어를 가져옵니다.
@@ -162,13 +156,11 @@ class FirebaseService {
   Future<Map<String, dynamic>> getDeviceStats() async {
     final wordsPath = await _deviceWordsPath;
     final snapshot = await _firestore.collection(wordsPath).get();
-    
     final totalWords = snapshot.docs.length;
-    final favoriteWords = snapshot.docs.where((doc) => doc.data()['isFavorite'] == true).length;
-    
+    // 즐겨찾기 개수는 Hive에서 계산해야 함
     return {
       'totalWords': totalWords,
-      'favoriteWords': favoriteWords,
+      'favoriteWords': 0, // Hive에서 별도 계산 필요
     };
   }
 

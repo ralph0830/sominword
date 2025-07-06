@@ -295,14 +295,12 @@ class _HomePageState extends State<HomePage> {
         final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
         final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
         final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
-        final isFavorite = data['isFavorite'] ?? data['is_favorite'] ?? false;
         return {
           'id': doc.id,
           'word': word,
           'partOfSpeech': partOfSpeech,
           'meaning': meaning,
           'input_timestamp': timestamp,
-          'isFavorite': isFavorite,
         };
       }).toList();
       _filterTodayWords();
@@ -317,14 +315,12 @@ class _HomePageState extends State<HomePage> {
           final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
           final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
           final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
-          final isFavorite = data['isFavorite'] ?? data['is_favorite'] ?? false;
           return {
             'id': doc.id,
             'word': word,
             'partOfSpeech': partOfSpeech,
             'meaning': meaning,
             'input_timestamp': timestamp,
-            'isFavorite': isFavorite,
           };
         }).toList();
         _filterTodayWords();
@@ -608,7 +604,34 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('단어 추가'),
-        content: const Text('단어 추가 기능은 추후 구현 예정입니다.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('CSV 입력 기능은 추후 지원 예정입니다.')),
+                    );
+                  },
+                  child: const Text('CSV 입력'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx); // 기존 다이얼로그 닫기
+                    _showTsvInputDialog();
+                  },
+                  child: const Text('TSV 입력'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Text('단일 단어 추가 기능은 추후 구현 예정입니다.'),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -616,6 +639,103 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showTsvInputDialog() {
+    final TextEditingController tsvController = TextEditingController();
+    String? errorText;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('TSV 단어 일괄 입력'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('[입력 규칙]'),
+                  const SizedBox(height: 4),
+                  const Text('1. 영단어\t품사(여러 개면 comma)\t한글뜻(여러 개면 comma)\t예문(선택)\t해석(선택)'),
+                  const Text('2. 품사가 2개 이상 + comma면 한글뜻도 comma로 1:1 매칭 (1:다 불가)'),
+                  const Text('3. 예문/해석은 비워도 됨'),
+                  const SizedBox(height: 8),
+                  const Text('예시:'),
+                  const Text('apple\t명사\t사과'),
+                  const Text('run\t동사,명사\t달리다,운영\tHe can run fast.\t그는 빨리 달릴 수 있다.'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tsvController,
+                    minLines: 6,
+                    maxLines: 12,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      labelText: 'TSV 텍스트 붙여넣기',
+                      errorText: errorText,
+                    ),
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('취소'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final lines = tsvController.text.trim().split('\n');
+                  List<Map<String, dynamic>> parsed = [];
+                  for (int i = 0; i < lines.length; i++) {
+                    final line = lines[i].trim();
+                    if (line.isEmpty) continue;
+                    final cols = line.split('\t');
+                    if (cols.length < 3) {
+                      setState(() { errorText = '${i+1}번째 줄: 최소 3개(영단어, 품사, 한글뜻) 필수'; });
+                      return;
+                    }
+                    final word = cols[0].trim();
+                    final pos = cols[1].trim();
+                    final meaning = cols[2].trim();
+                    final example = cols.length > 3 ? cols[3].trim() : null;
+                    final exampleKor = cols.length > 4 ? cols[4].trim() : null;
+                    // 품사/뜻 comma 처리
+                    final posList = pos.split(',').map((e) => e.trim()).toList();
+                    final meaningList = meaning.split(',').map((e) => e.trim()).toList();
+                    if (posList.length > 1 && meaningList.length > 1) {
+                      if (posList.length != meaningList.length) {
+                        setState(() { errorText = '${i+1}번째 줄: 품사와 한글뜻의 comma 개수가 다르면 1:1 매칭 불가'; });
+                        return;
+                      }
+                    }
+                    parsed.add({
+                      'word': word,
+                      'partOfSpeech': pos,
+                      'meaning': meaning,
+                      'example': example,
+                      'exampleKor': exampleKor,
+                    });
+                  }
+                  setState(() { errorText = null; });
+                  setState(() {
+                    words.addAll(parsed);
+                  });
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('TSV 단어 ${parsed.length}개가 임시로 추가되었습니다. (실제 저장은 추후 구현)')),
+                  );
+                },
+                child: const Text('확인'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -893,6 +1013,17 @@ class _HomePageState extends State<HomePage> {
           foregroundColor: Theme.of(context).colorScheme.onPrimary,
           elevation: 0,
           actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () async {
+                await _fetchWords();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('단어를 새로고침했습니다.')),
+                );
+              },
+              tooltip: '단어 새로고침',
+            ),
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: _showAddWordDialog,

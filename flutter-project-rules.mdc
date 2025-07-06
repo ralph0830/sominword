@@ -1,8 +1,15 @@
----
-description: 
-globs: 
-alwaysApply: false
----
+### [Flutter] 관리자 페이지/앱 프로젝트 분리 규칙
+
+- 관리자 페이지(Flutter Web)는 반드시 별도의 디렉토리(예: sominword_admin)로 분리하여 관리한다.
+- 사용자 앱(Flutter Android/iOS 등)은 sominword(메인 앱) 디렉토리에서 관리한다.
+- 관리자 페이지에는 android/, ios/, macos/, windows/, linux/ 등 모바일/데스크탑 앱 관련 폴더를 포함하지 않는다.
+- 관리자 페이지는 웹 전용 Flutter 프로젝트 구조를 따른다.
+- 프로젝트 구조 예시:
+  - ~/work/gamedev/sominword         # 사용자 앱(모바일/데스크탑)
+  - ~/work/gamedev/sominword_admin   # 관리자 웹 페이지(Flutter Web 전용)
+- 관리자 페이지에서 앱 관련 파일이 발견되면 즉시 삭제 또는 분리한다.
+
+
 ### [Flutter] 비동기 이후 BuildContext 사용 규칙
 
 - await 등 비동기 작업 이후 BuildContext를 사용할 때는 반드시 다음 중 하나를 지켜야 한다.
@@ -35,4 +42,3 @@ alwaysApply: false
   print('디버그 메시지'); // avoid_print 경고 발생
   ```
 - 공식문서: https://dart.dev/tools/diagnostics/avoid_print
- 
