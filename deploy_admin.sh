@@ -20,7 +20,7 @@ ssh -p 2202 ralph@ralphpark.com 'sudo chown -R ralph:ralph /var/www/html/sominwo
 
 # 3. 서버로 파일 전송
 echo "[3/5] 서버로 파일 전송 (scp, 포트 2202) ..."
-scp -P 2202 -r build/web/* ralph@ralphpark.com:/var/www/html/sominword/
+scp -P 2202 -r ../build/web/* ralph@ralphpark.com:/var/www/html/sominword/
 
 # 4. 배포 후 소유자/권한 nginx(101:101)로 변경
 

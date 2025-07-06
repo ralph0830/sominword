@@ -21,13 +21,25 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return android;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for android - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.iOS:
-        return ios;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for ios - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.macOS:
-        return macos;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for macos - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.windows:
-        return windows;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for windows - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -43,41 +55,6 @@ class DefaultFirebaseOptions {
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyAe6gW2dWMrgFkUM2RBMAVYKwk3nEW3pBQ',
     appId: '1:171763188147:web:b2a94d7e26ead2eb300bc6',
-    messagingSenderId: '171763188147',
-    projectId: 'sominword',
-    authDomain: 'sominword.firebaseapp.com',
-    storageBucket: 'sominword.firebasestorage.app',
-  );
-
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyADymiSapRZRUUtgTPdbSLN6OsofuvuLzs',
-    appId: '1:171763188147:android:4b163b4c7b8d986f300bc6',
-    messagingSenderId: '171763188147',
-    projectId: 'sominword',
-    storageBucket: 'sominword.firebasestorage.app',
-  );
-
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyADbRoeH1Gh2FiuCmjUquxRLVqfQLOhg-0',
-    appId: '1:171763188147:ios:142f8b67da914ce2300bc6',
-    messagingSenderId: '171763188147',
-    projectId: 'sominword',
-    storageBucket: 'sominword.firebasestorage.app',
-    iosBundleId: 'com.example.sominword',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyADbRoeH1Gh2FiuCmjUquxRLVqfQLOhg-0',
-    appId: '1:171763188147:ios:142f8b67da914ce2300bc6',
-    messagingSenderId: '171763188147',
-    projectId: 'sominword',
-    storageBucket: 'sominword.firebasestorage.app',
-    iosBundleId: 'com.example.sominword',
-  );
-
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAe6gW2dWMrgFkUM2RBMAVYKwk3nEW3pBQ',
-    appId: '1:171763188147:web:ed20e9931606d77b300bc6',
     messagingSenderId: '171763188147',
     projectId: 'sominword',
     authDomain: 'sominword.firebaseapp.com',

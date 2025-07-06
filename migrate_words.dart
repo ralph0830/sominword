@@ -82,7 +82,6 @@ void main() async {
           'koreanPartOfSpeech': wordData['koreanPartOfSpeech'] ?? '',
           'koreanMeaning': wordData['koreanMeaning'] ?? '',
           'inputTimestamp': wordData['inputTimestamp'] ?? FieldValue.serverTimestamp(),
-          'isFavorite': wordData['isFavorite'] ?? false,
         });
         
         if (kDebugMode) {
