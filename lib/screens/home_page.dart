@@ -1053,7 +1053,9 @@ class _HomePageState extends State<HomePage> {
                                 width: 340,
                                 height: 440,
                                 child: Swiper(
+                                  key: ValueKey(infiniteLoop), // loop 토글마다 완전 새로 mount
                                   itemBuilder: (BuildContext context, int idx) {
+                                    debugPrint('[SWIPER] itemBuilder idx=$idx, currentIndex=$currentIndex, infiniteLoop=$infiniteLoop, listLen=${list.length}, word=${list[idx]['word']}');
                                     final word = list[idx]['word'] as String? ?? '';
                                     final partOfSpeech = list[idx]['partOfSpeech'] as String? ?? '';
                                     final meaning = list[idx]['meaning'] as String? ?? '';
@@ -1077,9 +1079,53 @@ class _HomePageState extends State<HomePage> {
                                         icon: Icon(infiniteLoop ? Icons.lock : Icons.lock_open),
                                         tooltip: infiniteLoop ? '무한반복 ON' : '무한반복 OFF',
                                         onPressed: () {
-                                          setState(() {
-                                            infiniteLoop = !infiniteLoop;
-                                          });
+                                          int prevWordIdx = 0; // 항상 초기화
+                                          if (_pageController != null && list.isNotEmpty) {
+                                            int page;
+                                            if (_pageController!.hasClients) {
+                                              page = _pageController!.page?.round() ?? currentIndex + 1;
+                                            } else {
+                                              page = currentIndex + 1;
+                                            }
+                                            debugPrint('[LOOP TOGGLE] BEFORE: infiniteLoop=$infiniteLoop, page=$page, currentIndex=$currentIndex, prevWordIdx=$prevWordIdx, listLen=${list.length}');
+                                            // Swiper 인덱스 변환 공식
+                                            int getCurrentWordIndex(bool loop, int page, int listLen) {
+                                              if (loop) {
+                                                if (page == 0) return listLen - 1;
+                                                if (page == listLen + 1) return 0;
+                                                return page - 1;
+                                              } else {
+                                                return page;
+                                              }
+                                            }
+                                            if (infiniteLoop) {
+                                              // loop ON → OFF: dummy page → 실제 인덱스(0~N-1)
+                                              prevWordIdx = getCurrentWordIndex(true, page, list.length);
+                                              prevWordIdx = prevWordIdx.clamp(0, list.length - 1);
+                                            } else {
+                                              // loop OFF → ON: 실제 인덱스(0~N-1) → dummy page(1~N)
+                                              prevWordIdx = getCurrentWordIndex(false, page, list.length);
+                                              prevWordIdx = (prevWordIdx + 1).clamp(1, list.length);
+                                            }
+                                            debugPrint('[LOOP TOGGLE] CALC: infiniteLoop=$infiniteLoop, page=$page, prevWordIdx=$prevWordIdx');
+                                            setState(() {
+                                              infiniteLoop = !infiniteLoop;
+                                              debugPrint('[LOOP TOGGLE] setState: infiniteLoop= [31m$infiniteLoop [0m');
+                                            });
+                                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                                              waitForAttachAndJump(prevWordIdx);
+                                            });
+                                          } else {
+                                            prevWordIdx = currentIndex;
+                                            debugPrint('[LOOP TOGGLE] fallback: currentIndex=$currentIndex, prevWordIdx=$prevWordIdx, listLen=${list.length}');
+                                            setState(() {
+                                              infiniteLoop = !infiniteLoop;
+                                              debugPrint('[LOOP TOGGLE] setState (fallback): infiniteLoop= [31m$infiniteLoop [0m');
+                                            });
+                                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                                              waitForAttachAndJump(prevWordIdx);
+                                            });
+                                          }
                                         },
                                       ),
                                     );
@@ -1088,6 +1134,7 @@ class _HomePageState extends State<HomePage> {
                                   loop: infiniteLoop,
                                   index: currentIndex,
                                   onIndexChanged: (idx) {
+                                    debugPrint('[SWIPER] onIndexChanged idx=$idx, currentIndex=$currentIndex, infiniteLoop=$infiniteLoop, listLen=${list.length}, word=${list[idx]['word']}');
                                     setState(() {
                                       prevIndex = currentIndex;
                                       currentIndex = idx;
@@ -1388,6 +1435,20 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       );
+    }
+  }
+
+  // Swiper attach polling 후 jumpToPage 실행 함수
+  void waitForAttachAndJump(int targetPage, {int retry = 0}) {
+    if (_pageController != null && _pageController!.hasClients) {
+      debugPrint('[LOOP TOGGLE] polling: jumpToPage target=$targetPage');
+      _pageController!.jumpToPage(targetPage);
+    } else if (retry < 20) { // 최대 200ms까지 polling
+      Future.delayed(const Duration(milliseconds: 10), () {
+        waitForAttachAndJump(targetPage, retry: retry + 1);
+      });
+    } else {
+      debugPrint('[LOOP TOGGLE] polling: attach 실패, jumpToPage 스킵');
     }
   }
 }
