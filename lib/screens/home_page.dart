@@ -287,49 +287,12 @@ class _HomePageState extends State<HomePage> {
         });
         return;
       }
-      final snapshot = await firebaseService.getWordsStream().first;
-      if (!mounted) return;
-      words = snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        final word = data['englishWord'] ?? data['english_word'] ?? '';
-        final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
-        final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
-        final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
-        return {
-          'id': doc.id,
-          'word': word,
-          'partOfSpeech': partOfSpeech,
-          'meaning': meaning,
-          'input_timestamp': timestamp,
-        };
-      }).toList();
+      // Firestore에서 단어를 즉시 fetch
+      words = await firebaseService.getWordsOnce();
       _filterTodayWords();
       currentIndex = 0;
     } catch (e) {
-      try {
-        final snapshot = await firebaseService.getWordsStream().first;
-        if (!mounted) return;
-        words = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final word = data['englishWord'] ?? data['english_word'] ?? '';
-          final partOfSpeech = data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '';
-          final meaning = data['koreanMeaning'] ?? data['korean_meaning'] ?? '';
-          final timestamp = data['inputTimestamp'] ?? data['input_timestamp'];
-          return {
-            'id': doc.id,
-            'word': word,
-            'partOfSpeech': partOfSpeech,
-            'meaning': meaning,
-            'input_timestamp': timestamp,
-          };
-        }).toList();
-        _filterTodayWords();
-        currentIndex = 0;
-        isOffline = true;
-        errorMsg = '네트워크 연결이 불안정하여 오프라인 캐시 데이터로 표시합니다.';
-      } catch (e2) {
-        errorMsg = '단어 불러오기 실패(네트워크/캐시 모두 불가): $e';
-      }
+      errorMsg = '단어 불러오기 실패: $e';
     }
     if (mounted) {
       setState(() {
@@ -1014,15 +977,28 @@ class _HomePageState extends State<HomePage> {
           elevation: 0,
           actions: [
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.sync),
+              tooltip: '동기화',
               onPressed: () async {
-                await _fetchWords();
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('단어를 새로고침했습니다.')),
-                );
+                setState(() { isLoading = true; });
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await _fetchWords(); // Firestore에서만 새로고침
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('단어를 새로고침했습니다. (Firebase 기준)')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('새로고침 실패: $e')),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() { isLoading = false; });
+                }
               },
-              tooltip: '단어 새로고침',
             ),
             IconButton(
               icon: const Icon(Icons.add),

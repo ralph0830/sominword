@@ -1,0 +1,40 @@
+---
+globs: *.dart
+alwaysApply: false
+---
+# 비동기 함수 내 BuildContext 사용 규칙 (use_build_context_synchronously)
+
+- 비동기 함수(`async`/`await`)에서 `BuildContext`를 `await` 이후에 사용할 때, 위젯이 이미 dispose(제거)된 상태일 수 있으므로 위험하다.
+- 비동기 작업 후에 `context`를 사용하면 예기치 않은 크래시가 발생할 수 있다.
+- 반드시 아래 규칙을 지킨다:
+  1. 비동기 gap(=await) 이후 context 사용을 피한다.
+  2. 꼭 사용해야 한다면, `mounted` 속성으로 위젯이 살아있는지 확인 후 사용한다.
+
+## 잘못된 예시
+```dart
+void onButtonTapped(BuildContext context) async {
+  await Future.delayed(const Duration(seconds: 1));
+  Navigator.of(context).pop(); // ❌ 위험: 위젯이 dispose됐을 수 있음
+}
+```
+
+## 올바른 예시
+### 1. 비동기 gap 없이 context 사용
+```dart
+void onButtonTapped(BuildContext context) {
+  Navigator.of(context).pop(); // 안전
+}
+```
+
+### 2. 비동기 gap 이후에는 mounted 체크
+```dart
+class MyWidgetState extends State<MyWidget> {
+  void onButtonTapped() async {
+    await Future.delayed(const Duration(seconds: 1));
+    if (!mounted) return; // 위젯이 살아있는지 확인
+    Navigator.of(context).pop(); // 안전하게 사용
+  }
+}
+```
+
+- 참고: [Dart 공식 문서](https://dart.dev/tools/diagnostics/use_build_context_synchronously?utm_source=dartdev&utm_medium=redir&utm_id=diagcode&utm_content=use_build_context_synchronously)

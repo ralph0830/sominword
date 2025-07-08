@@ -246,4 +246,83 @@ class FirebaseService {
       return 0; // 오류 발생 시 등록되지 않은 것으로 처리
     }
   }
+
+  /// Firestore와 로컬 단어 리스트를 비교하여 Firestore에 동기화
+  /// Firestore에 없는 단어는 로컬에서도 제거되도록, 동기화 후 남아있는 id 리스트를 반환
+  Future<List<String>> syncWordsWithFirestore(List<Map<String, dynamic>> localWords) async {
+    final wordsPath = await _deviceWordsPath;
+    final snapshot = await _firestore.collection(wordsPath).get();
+    final firestoreWords = <String, Map<String, dynamic>>{};
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      firestoreWords[doc.id] = {
+        'id': doc.id,
+        'word': data['englishWord'] ?? data['english_word'] ?? '',
+        'partOfSpeech': data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '',
+        'meaning': data['koreanMeaning'] ?? data['korean_meaning'] ?? '',
+        'input_timestamp': data['inputTimestamp'] ?? data['input_timestamp'],
+      };
+    }
+    // 로컬 단어를 id 기준으로 맵핑
+    final localMap = <String, Map<String, dynamic>>{};
+    for (final w in localWords) {
+      if (w['id'] != null) {
+        localMap[w['id']] = w;
+      }
+    }
+    final batch = _firestore.batch();
+    // Firestore에만 있는 단어 → 삭제
+    for (final id in firestoreWords.keys) {
+      if (!localMap.containsKey(id)) {
+        batch.delete(_firestore.collection(wordsPath).doc(id));
+      }
+    }
+    // 로컬에만 있는 단어 → 추가
+    for (final w in localWords) {
+      if (w['id'] == null || !firestoreWords.containsKey(w['id'])) {
+        batch.set(_firestore.collection(wordsPath).doc(), {
+          'englishWord': w['word'],
+          'koreanPartOfSpeech': w['partOfSpeech'],
+          'koreanMeaning': w['meaning'],
+          'inputTimestamp': w['input_timestamp'],
+        });
+      }
+    }
+    // 둘 다 있지만 내용이 다르면 Firestore 수정
+    for (final id in firestoreWords.keys) {
+      if (localMap.containsKey(id)) {
+        final fw = firestoreWords[id]!;
+        final lw = localMap[id]!;
+        if (fw['word'] != lw['word'] || fw['partOfSpeech'] != lw['partOfSpeech'] || fw['meaning'] != lw['meaning']) {
+          batch.update(_firestore.collection(wordsPath).doc(id), {
+            'englishWord': lw['word'],
+            'koreanPartOfSpeech': lw['partOfSpeech'],
+            'koreanMeaning': lw['meaning'],
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
+    await batch.commit();
+    // Firestore에 남아있는 id만 반환
+    return firestoreWords.keys.toList();
+  }
+
+  /// Firestore에서 단어를 즉시 한 번만 가져오는 메서드 (최신순)
+  Future<List<Map<String, dynamic>>> getWordsOnce() async {
+    final wordsPath = await _deviceWordsPath;
+    final snapshot = await _firestore.collection(wordsPath)
+        .orderBy('inputTimestamp', descending: true)
+        .get();
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      return {
+        'id': doc.id,
+        'word': data['englishWord'] ?? data['english_word'] ?? '',
+        'partOfSpeech': data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '',
+        'meaning': data['koreanMeaning'] ?? data['korean_meaning'] ?? '',
+        'input_timestamp': data['inputTimestamp'] ?? data['input_timestamp'],
+      };
+    }).toList();
+  }
 } 

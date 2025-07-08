@@ -90,7 +90,9 @@ class _QuizPageState extends State<QuizPage> {
       int weight = 1;
       if (i < 5) {
         weight = 3;
-      } else if (i < 10) weight = 2;
+      } else if (i < 10) {
+        weight = 2;
+      }
       for (int j = 0; j < weight; j++) {
         weighted.add(allWords[i]);
       }
@@ -334,7 +336,7 @@ class _QuizPageState extends State<QuizPage> {
                 ),
                 SizedBox(height: usableHeight * 0.02),
                 Text(
-                  '점수: [38;5;2m$_score[0m / $_totalQuestions',
+                  '점수:  [38;5;2m$_score [0m / $_totalQuestions',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 SizedBox(height: usableHeight * 0.03),
