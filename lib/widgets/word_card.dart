@@ -187,7 +187,7 @@ class WordCard extends StatelessWidget {
                       : Center(
                           child: SizedBox(
                             width: double.infinity,
-                            child: Text(
+                            child: AutoSizeText(
                               meaning,
                               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                     color: Colors.black87,
@@ -196,6 +196,7 @@ class WordCard extends StatelessWidget {
                                   ) ?? TextStyle(fontSize: meaningFontSize, color: Colors.black87),
                               textAlign: TextAlign.center,
                               maxLines: 1,
+                              minFontSize: 14,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
