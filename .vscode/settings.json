@@ -17,5 +17,13 @@
   "firebase.dataconnect.enabled": false,
   "firebase.dataconnect.showInExplorer": false,
   "firebase.dataconnect.showInCommandPalette": false,
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    ".yoyo": true
+  },
 
 } 
