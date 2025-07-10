@@ -22,6 +22,7 @@ class AdminApp extends StatelessWidget {
       title: 'Admin - 기기별 단어 관리',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        fontFamily: 'NotoSansKR',
       ),
       home: const AuthWrapper(),
     );

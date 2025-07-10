@@ -5,15 +5,21 @@ import '../admin/widgets/device_card.dart';
 import 'admin_management_page.dart';
 import 'device_approval_status_page.dart';
 import 'word_admin_page.dart';
-import '../admin/dialogs.dart' show showCopyWordsDialog;
 
-class DeviceListPage extends StatelessWidget {
+class DeviceListPage extends StatefulWidget {
   final bool isSuperAdmin;
   final String? email;
   const DeviceListPage({super.key, required this.isSuperAdmin, this.email});
 
   @override
+  State<DeviceListPage> createState() => _DeviceListPageState();
+}
+
+class _DeviceListPageState extends State<DeviceListPage> {
+  @override
   Widget build(BuildContext context) {
+    final isSuperAdmin = widget.isSuperAdmin;
+    final email = widget.email;
     return Scaffold(
       appBar: AppBar(
         title: const Text('기기별 단어 관리'),
@@ -91,7 +97,7 @@ class DeviceListPage extends StatelessWidget {
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add),
               label: const Text('기기 추가 신청'),
-              onPressed: () => _showDeviceRequestDialog(context, email!),
+              onPressed: () => _showDeviceRequestDialog(context, email),
             )
           : null,
       body: StreamBuilder<QuerySnapshot>(
@@ -148,9 +154,7 @@ class DeviceListPage extends StatelessWidget {
                 onEditNickname: () {
                   _showEditNicknameDialog(context, deviceId, nickname);
                 },
-                onCopyWords: (!isSuperAdmin && email != null) || isSuperAdmin
-                  ? () => _showCopyWordsDialog(context, deviceId, deviceName)
-                  : null,
+                onCopyWords: null,
                 onTap: () {
                   Navigator.push(
                     context,
@@ -240,44 +244,44 @@ class DeviceListPage extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               final deviceId = deviceIdController.text.trim();
+              // Firestore 작업: context 사용하지 않음
               final deviceDoc = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
-              if (!ctx.mounted) return;
-              if (!deviceDoc.exists) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('등록된 고유 번호가 아닙니다. 앱을 기기에서 최소 1회 실행해주세요.')),
-                );
-                return;
-              }
               final data = deviceDoc.data();
-              if (data?['ownerEmail'] != null && (data?['ownerEmail'] as String).isNotEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('이미 등록된 번호입니다.')),
-                );
-                return;
-              }
+              final deviceExists = deviceDoc.exists;
+              final alreadyRegistered = data?['ownerEmail'] != null && (data?['ownerEmail'] as String).isNotEmpty;
               final deviceName = data?['deviceName'] ?? 'Unknown Device';
-              await FirebaseFirestore.instance.collection('pendingDevices').add({
-                'deviceId': deviceId,
-                'deviceName': deviceName,
-                'ownerEmail': email,
-                'requestedAt': FieldValue.serverTimestamp(),
-              });
+              String? errorMsg;
+              bool success = false;
+              if (!deviceExists) {
+                errorMsg = '등록된 고유 번호가 아닙니다. 앱을 기기에서 최소 1회 실행해주세요.';
+              } else if (alreadyRegistered) {
+                errorMsg = '이미 등록된 번호입니다.';
+              } else {
+                await FirebaseFirestore.instance.collection('pendingDevices').add({
+                  'deviceId': deviceId,
+                  'deviceName': deviceName,
+                  'ownerEmail': email,
+                  'requestedAt': FieldValue.serverTimestamp(),
+                });
+                success = true;
+              }
+              // UI 처리: context 사용은 async gap 이후, mounted 체크
               if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(content: Text('기기 추가 신청이 완료되었습니다. 슈퍼 관리자의 승인을 기다려주세요.')),
-              );
+              if (success) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('기기 추가 신청이 완료되었습니다. 슈퍼 관리자의 승인을 기다려주세요.')),
+                );
+              } else if (errorMsg != null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(errorMsg)),
+                );
+              }
             },
             child: const Text('신청'),
           ),
         ],
       ),
     );
-  }
-
-  void _showCopyWordsDialog(BuildContext context, String deviceId, String deviceName) {
-    if (email != null) {
-      showCopyWordsDialog(context, deviceId, deviceName, email!);
-    }
   }
 } 

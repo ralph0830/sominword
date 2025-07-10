@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
-class WordCard extends StatelessWidget {
+class WordCard extends StatefulWidget {
   final Map<String, dynamic> word;
   final String wordId;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final bool selected;
+  final ValueChanged<bool?>? onSelected;
 
   const WordCard({
     super.key,
@@ -12,20 +14,30 @@ class WordCard extends StatelessWidget {
     required this.wordId,
     this.onEdit,
     this.onDelete,
+    this.selected = false,
+    this.onSelected,
   });
 
   @override
+  State<WordCard> createState() => _WordCardState();
+}
+
+class _WordCardState extends State<WordCard> {
+  @override
   Widget build(BuildContext context) {
-    final englishWord = word['englishWord'] ?? '';
-    final koreanPartOfSpeech = word['koreanPartOfSpeech'] ?? '';
-    final koreanMeaning = word['koreanMeaning'] ?? '';
-    final sentence = word['sentence'] ?? '';
-    final sentenceKor = word['sentenceKor'] ?? '';
-    final inputTimestamp = word['inputTimestamp'];
+    final englishWord = widget.word['englishWord'] ?? '';
+    final koreanPartOfSpeech = widget.word['koreanPartOfSpeech'] ?? '';
+    final koreanMeaning = widget.word['koreanMeaning'] ?? '';
+    final sentence = widget.word['sentence'] ?? '';
+    final sentenceKor = widget.word['sentenceKor'] ?? '';
+    final inputTimestamp = widget.word['inputTimestamp'];
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: const Icon(Icons.book, size: 32),
+        leading: Checkbox(
+          value: widget.selected,
+          onChanged: widget.onSelected,
+        ),
         title: Text(
           englishWord,
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -45,10 +57,10 @@ class WordCard extends StatelessWidget {
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
-            if (value == 'edit' && onEdit != null) {
-              onEdit!();
-            } else if (value == 'delete' && onDelete != null) {
-              onDelete!();
+            if (value == 'edit' && widget.onEdit != null) {
+              widget.onEdit!();
+            } else if (value == 'delete' && widget.onDelete != null) {
+              widget.onDelete!();
             }
           },
           itemBuilder: (context) => [
