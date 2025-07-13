@@ -162,6 +162,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
                       builder: (context) => WordAdminPage(
                         deviceId: deviceId,
                         deviceName: deviceName,
+                        email: email ?? '', // email 전달
                       ),
                     ),
                   );

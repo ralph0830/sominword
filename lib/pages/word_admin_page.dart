@@ -33,11 +33,11 @@ class _WordAdminPageState extends State<WordAdminPage> {
   }
 
   Future<void> _deleteSelectedWords() async {
-    final deviceId = widget.deviceId;
     final count = _selectedWordIds.length;
     if (count == 0) return;
-    bool confirm = false;
-    await showDialog<bool>(
+
+    // ignore: use_build_context_synchronously
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('선택 삭제'),
@@ -47,43 +47,52 @@ class _WordAdminPageState extends State<WordAdminPage> {
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('삭제')),
         ],
       ),
-    ).then((value) => confirm = value == true);
-    if (!mounted || !confirm) return;
+    );
+
+    if (confirm != true) return;
+    if (!mounted) return;
+
     final futures = _selectedWordIds.map((wordId) =>
       FirebaseFirestore.instance
         .collection('devices')
-        .doc(deviceId)
+        .doc(widget.deviceId)
         .collection('words')
         .doc(wordId)
         .delete()
     ).toList();
     await Future.wait(futures);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$count개 단어가 삭제되었습니다.')),
-    );
-    _clearSelection();
+
+    if (mounted) {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$count개 단어가 삭제되었습니다.')),
+      );
+      _clearSelection();
+    }
   }
 
   // 선택 이동 다이얼로그: 내 devices 목록을 드롭다운으로 보여주고 선택
   Future<void> _moveSelectedWords() async {
-    final deviceId = widget.deviceId;
     final count = _selectedWordIds.length;
     if (count == 0) return;
+
     // 내 devices 목록 불러오기 (현재 기기 제외)
     final devicesSnapshot = await FirebaseFirestore.instance
         .collection('devices')
         .where('ownerEmail', isEqualTo: widget.email)
         .get();
+    
+    if (!mounted) return;
+
     final deviceOptions = devicesSnapshot.docs
-        .where((d) => d.id != deviceId)
+        .where((d) => d.id != widget.deviceId)
         .map((d) => {
               'id': d.id,
               'label': '${d.id} - ${d['nickname'] ?? ''}',
             })
         .toList();
-    String? targetDeviceId;
-    await showDialog<String>(
+    // ignore: use_build_context_synchronously
+    final targetDeviceId = await showDialog<String>(
       context: context,
       builder: (ctx) {
         String? selectedId;
@@ -111,8 +120,11 @@ class _WordAdminPageState extends State<WordAdminPage> {
           ),
         );
       },
-    ).then((value) => targetDeviceId = value);
-    if (!mounted || targetDeviceId == null || targetDeviceId!.isEmpty) return;
+    );
+
+    if (targetDeviceId == null || targetDeviceId.isEmpty) return;
+    if (!mounted) return;
+
     // 이동 대상 기기의 기존 단어(영어 단어 기준) 목록 조회
     final targetWordsSnapshot = await FirebaseFirestore.instance
         .collection('devices')
@@ -127,23 +139,30 @@ class _WordAdminPageState extends State<WordAdminPage> {
     int failCount = 0;
     final progressNotifier = ValueNotifier<int>(0);
     bool cancelled = false;
+    
+    if (!mounted) return;
     // 진행 현황 다이얼로그 표시
-    Future progressDialog = _showWordTransferProgressDialog(
+    // ignore: use_build_context_synchronously
+    final progressDialog = _showWordTransferProgressDialog(
       context,
       action: '이동',
       totalCount: _selectedWordIds.length,
       progressNotifier: progressNotifier,
       onCancel: () {
         cancelled = true;
-        Navigator.of(context, rootNavigator: true).pop();
+        if(mounted) {
+          // ignore: use_build_context_synchronously
+          Navigator.of(context, rootNavigator: true).pop();
+        }
       },
     );
+
     for (final wordId in _selectedWordIds) {
       if (cancelled) break;
       try {
         final doc = await FirebaseFirestore.instance
             .collection('devices')
-            .doc(deviceId)
+            .doc(widget.deviceId)
             .collection('words')
             .doc(wordId)
             .get();
@@ -174,38 +193,45 @@ class _WordAdminPageState extends State<WordAdminPage> {
       progressNotifier.value++;
     }
     _clearSelection();
-    if (!mounted) return;
-    Navigator.of(context, rootNavigator: true).pop(); // 진행 다이얼로그 닫기
-    await progressDialog;
-    if (!mounted) return;
-    await _showWordTransferResultDialog(context,
-      action: '이동',
-      successCount: movedCount,
-      duplicateCount: duplicateCount,
-      failCount: failCount,
-      targetDeviceId: targetDeviceId!,
-    );
+
+    if (mounted) {
+      // ignore: use_build_context_synchronously
+      Navigator.of(context, rootNavigator: true).pop(); // 진행 다이얼로그 닫기
+      await progressDialog;
+      if (mounted) {
+        // ignore: use_build_context_synchronously
+        await _showWordTransferResultDialog(context,
+          action: '이동',
+          successCount: movedCount,
+          duplicateCount: duplicateCount,
+          failCount: failCount,
+          targetDeviceId: targetDeviceId,
+        );
+      }
+    }
   }
 
   // 선택 복사 다이얼로그: 내 devices 목록을 드롭다운으로 보여주고 선택
   Future<void> _copySelectedWords() async {
-    final deviceId = widget.deviceId;
     final count = _selectedWordIds.length;
     if (count == 0) return;
+
     // 내 devices 목록 불러오기 (현재 기기 제외)
     final devicesSnapshot = await FirebaseFirestore.instance
         .collection('devices')
         .where('ownerEmail', isEqualTo: widget.email)
         .get();
+
+    if (!mounted) return;
     final deviceOptions = devicesSnapshot.docs
-        .where((d) => d.id != deviceId)
+        .where((d) => d.id != widget.deviceId)
         .map((d) => {
               'id': d.id,
               'label': '${d.id} - ${d['nickname'] ?? ''}',
             })
         .toList();
-    String? targetDeviceId;
-    await showDialog<String>(
+    // ignore: use_build_context_synchronously
+    final targetDeviceId = await showDialog<String>(
       context: context,
       builder: (ctx) {
         String? selectedId;
@@ -233,8 +259,11 @@ class _WordAdminPageState extends State<WordAdminPage> {
           ),
         );
       },
-    ).then((value) => targetDeviceId = value);
-    if (!mounted || targetDeviceId == null || targetDeviceId!.isEmpty) return;
+    );
+    
+    if (targetDeviceId == null || targetDeviceId.isEmpty) return;
+    if (!mounted) return;
+
     // 복사 대상 기기의 기존 단어(영어 단어 기준) 목록 조회
     final targetWordsSnapshot = await FirebaseFirestore.instance
         .collection('devices')
@@ -249,15 +278,21 @@ class _WordAdminPageState extends State<WordAdminPage> {
     int failCount = 0;
     final progressNotifier = ValueNotifier<int>(0);
     bool cancelled = false;
+    
+    if (!mounted) return;
     // 진행 현황 다이얼로그 표시
-    Future progressDialog = _showWordTransferProgressDialog(
+    // ignore: use_build_context_synchronously
+    final progressDialog = _showWordTransferProgressDialog(
       context,
       action: '복사',
       totalCount: _selectedWordIds.length,
       progressNotifier: progressNotifier,
       onCancel: () {
         cancelled = true;
-        Navigator.of(context, rootNavigator: true).pop();
+        if(mounted) {
+          // ignore: use_build_context_synchronously
+          Navigator.of(context, rootNavigator: true).pop();
+        }
       },
     );
     for (final wordId in _selectedWordIds) {
@@ -265,7 +300,7 @@ class _WordAdminPageState extends State<WordAdminPage> {
       try {
         final doc = await FirebaseFirestore.instance
             .collection('devices')
-            .doc(deviceId)
+            .doc(widget.deviceId)
             .collection('words')
             .doc(wordId)
             .get();
@@ -294,17 +329,22 @@ class _WordAdminPageState extends State<WordAdminPage> {
       }
       progressNotifier.value++;
     }
-    if (!mounted) return;
-    Navigator.of(context, rootNavigator: true).pop(); // 진행 다이얼로그 닫기
-    await progressDialog;
-    if (!mounted) return;
-    await _showWordTransferResultDialog(context,
-      action: '복사',
-      successCount: copiedCount,
-      duplicateCount: duplicateCount,
-      failCount: failCount,
-      targetDeviceId: targetDeviceId!,
-    );
+
+    if (mounted) {
+      // ignore: use_build_context_synchronously
+      Navigator.of(context, rootNavigator: true).pop(); // 진행 다이얼로그 닫기
+      await progressDialog;
+      if (mounted) {
+        // ignore: use_build_context_synchronously
+        await _showWordTransferResultDialog(context,
+          action: '복사',
+          successCount: copiedCount,
+          duplicateCount: duplicateCount,
+          failCount: failCount,
+          targetDeviceId: targetDeviceId,
+        );
+      }
+    }
   }
 
   // 이동/복사 결과 요약 다이얼로그
@@ -315,6 +355,7 @@ class _WordAdminPageState extends State<WordAdminPage> {
     required int failCount,
     required String targetDeviceId,
   }) async {
+    if (!mounted) return;
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -347,6 +388,7 @@ class _WordAdminPageState extends State<WordAdminPage> {
     required ValueNotifier<int> progressNotifier,
     required VoidCallback onCancel,
   }) async {
+    if (!mounted) return;
     await showDialog(
       barrierDismissible: false,
       context: context,
@@ -403,26 +445,30 @@ class _WordAdminPageState extends State<WordAdminPage> {
           IconButton(
             icon: const Icon(Icons.download),
             tooltip: 'TSV로 추출',
-            onPressed: () async {
-              // Firestore에서 단어 리스트를 읽어와 TSV로 변환
-              final snapshot = await FirebaseFirestore.instance
+            onPressed: () {
+              FirebaseFirestore.instance
                   .collection('devices')
                   .doc(widget.deviceId)
                   .collection('words')
                   .orderBy('inputTimestamp', descending: true)
-                  .get();
-              final words = snapshot.docs;
-              final tsv = words.map((doc) {
-                final w = doc.data();
-                return [
-                  w['englishWord'] ?? '',
-                  w['koreanPartOfSpeech'] ?? '',
-                  w['koreanMeaning'] ?? '',
-                  w['sentence'] ?? '',
-                  w['sentenceKor'] ?? '',
-                ].join('\t');
-              }).join('\n');
-              await showTsvExportDialog(context, widget.deviceName, tsv);
+                  .get()
+                  .then((snapshot) {
+                final words = snapshot.docs;
+                final tsv = words.map((doc) {
+                  final w = doc.data();
+                  return [
+                    w['englishWord'] ?? '',
+                    w['koreanPartOfSpeech'] ?? '',
+                    w['koreanMeaning'] ?? '',
+                    w['sentence'] ?? '',
+                    w['sentenceKor'] ?? '',
+                  ].join('\t');
+                }).join('\n');
+                if (mounted) {
+                  // ignore: use_build_context_synchronously
+                  showTsvExportDialog(context, widget.deviceName, tsv);
+                }
+              });
             },
           ),
         ],
@@ -430,45 +476,53 @@ class _WordAdminPageState extends State<WordAdminPage> {
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
         label: const Text('단어 추가'),
-        onPressed: () async {
-          final result = await showEditWordInputDialog(context);
-          if (!context.mounted) return;
-          if (result != null) {
-            if (result is List<Map<String, String>>) {
-              // TSV 대량 추가
-              final futures = result.map((input) =>
+        onPressed: () {
+          // ignore: use_build_context_synchronously
+          showEditWordInputDialog(context).then((result) {
+            if (!mounted) return;
+            if (result != null) {
+              if (result is List<Map<String, String>>) {
+                // TSV 대량 추가
+                final futures = result.map((input) =>
+                  FirebaseFirestore.instance
+                    .collection('devices')
+                    .doc(widget.deviceId)
+                    .collection('words')
+                    .add({
+                      ...input,
+                      'inputTimestamp': FieldValue.serverTimestamp(),
+                      'createdAt': FieldValue.serverTimestamp(),
+                    })
+                ).toList();
+                Future.wait(futures).then((_) {
+                  if (mounted) {
+                    // ignore: use_build_context_synchronously
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${result.length}개 단어가 추가되었습니다.')),
+                    );
+                  }
+                });
+              } else if (result is Map<String, String>) {
+                // 단일 추가
                 FirebaseFirestore.instance
-                  .collection('devices')
-                  .doc(widget.deviceId)
-                  .collection('words')
-                  .add({
-                    ...input,
-                    'inputTimestamp': FieldValue.serverTimestamp(),
-                    'createdAt': FieldValue.serverTimestamp(),
-                  })
-              ).toList();
-              await Future.wait(futures);
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${result.length}개 단어가 추가되었습니다.')),
-              );
-            } else if (result is Map<String, String>) {
-              // 단일 추가
-              await FirebaseFirestore.instance
-                  .collection('devices')
-                  .doc(widget.deviceId)
-                  .collection('words')
-                  .add({
-                    ...result,
-                    'inputTimestamp': FieldValue.serverTimestamp(),
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('단어가 추가되었습니다.')),
-              );
+                    .collection('devices')
+                    .doc(widget.deviceId)
+                    .collection('words')
+                    .add({
+                      ...result,
+                      'inputTimestamp': FieldValue.serverTimestamp(),
+                      'createdAt': FieldValue.serverTimestamp(),
+                    }).then((_) {
+                  if (mounted) {
+                    // ignore: use_build_context_synchronously
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('단어가 추가되었습니다.')),
+                    );
+                  }
+                });
+              }
             }
-          }
+          });
         },
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -522,40 +576,50 @@ class _WordAdminPageState extends State<WordAdminPage> {
                       wordId: wordId,
                       selected: _selectedWordIds.contains(wordId),
                       onSelected: (selected) => _toggleSelect(wordId, selected),
-                      onEdit: () async {
-                        final input = await showEditWordInputDialog(context, word: word);
-                        if (!context.mounted) return;
-                        if (input != null) {
-                          await FirebaseFirestore.instance
-                              .collection('devices')
-                              .doc(widget.deviceId)
-                              .collection('words')
-                              .doc(wordId)
-                              .set({
-                                ...input,
-                                'updatedAt': FieldValue.serverTimestamp(),
-                              }, SetOptions(merge: true));
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('단어가 수정되었습니다.')),
-                          );
-                        }
+                      onEdit: () {
+                        // ignore: use_build_context_synchronously
+                        showEditWordInputDialog(context, word: word).then((input) {
+                          if (!mounted) return;
+                          if (input != null) {
+                            FirebaseFirestore.instance
+                                .collection('devices')
+                                .doc(widget.deviceId)
+                                .collection('words')
+                                .doc(wordId)
+                                .set({
+                                  ...input,
+                                  'updatedAt': FieldValue.serverTimestamp(),
+                                }, SetOptions(merge: true)).then((_) {
+                              if (mounted) {
+                                // ignore: use_build_context_synchronously
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('단어가 수정되었습니다.')),
+                                );
+                              }
+                            });
+                          }
+                        });
                       },
-                      onDelete: () async {
-                        final confirm = await showDeleteWordConfirmDialog(context, word['englishWord']);
-                        if (!context.mounted) return;
-                        if (confirm) {
-                          await FirebaseFirestore.instance
-                              .collection('devices')
-                              .doc(widget.deviceId)
-                              .collection('words')
-                              .doc(wordId)
-                              .delete();
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('단어가 삭제되었습니다.')),
-                          );
-                        }
+                      onDelete: () {
+                        // ignore: use_build_context_synchronously
+                        showDeleteWordConfirmDialog(context, word['englishWord']).then((confirm) {
+                          if (!mounted) return;
+                          if (confirm == true) {
+                            FirebaseFirestore.instance
+                                .collection('devices')
+                                .doc(widget.deviceId)
+                                .collection('words')
+                                .doc(wordId)
+                                .delete().then((_) {
+                              if (mounted) {
+                                // ignore: use_build_context_synchronously
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('단어가 삭제되었습니다.')),
+                                );
+                              }
+                            });
+                          }
+                        });
                       },
                     );
                   },
@@ -567,4 +631,4 @@ class _WordAdminPageState extends State<WordAdminPage> {
       ),
     );
   }
-} 
+}

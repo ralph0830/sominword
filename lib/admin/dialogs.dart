@@ -91,72 +91,170 @@ Future<Map<String, dynamic>?> showDeviceRequestDialog(BuildContext context) asyn
   );
 }
 
-/// 단어 입력 다이얼로그: 입력값만 반환, Firestore 작업은 State에서 처리
-Future<Map<String, String>?> showEditWordInputDialog(BuildContext context, {Map<String, dynamic>? word}) async {
-  final engController = TextEditingController(text: word?['englishWord'] ?? '');
-  final posController = TextEditingController(text: word?['koreanPartOfSpeech'] ?? '');
-  final korController = TextEditingController(text: word?['koreanMeaning'] ?? '');
-  final sentenceController = TextEditingController(text: word?['sentence'] ?? '');
-  final sentenceKorController = TextEditingController(text: word?['sentenceKor'] ?? '');
-  return await showDialog<Map<String, String>>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(word == null ? '단어 추가' : '단어 수정'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: engController,
-            decoration: const InputDecoration(labelText: '영어 단어'),
-          ),
-          TextField(
-            controller: posController,
-            decoration: const InputDecoration(labelText: '품사'),
-          ),
-          TextField(
-            controller: korController,
-            decoration: const InputDecoration(labelText: '한글 뜻'),
-          ),
-          TextField(
-            controller: sentenceController,
-            decoration: const InputDecoration(labelText: '예문'),
-          ),
-          TextField(
-            controller: sentenceKorController,
-            decoration: const InputDecoration(labelText: '예문 해석'),
-          ),
-        ],
+class AddWordDialog extends StatefulWidget {
+  final Map<String, dynamic>? word;
+  const AddWordDialog({super.key, this.word});
+
+  @override
+  State<AddWordDialog> createState() => _AddWordDialogState();
+}
+
+class _AddWordDialogState extends State<AddWordDialog> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  late TextEditingController engController;
+  late TextEditingController posController;
+  late TextEditingController korController;
+  late TextEditingController sentenceController;
+  late TextEditingController sentenceKorController;
+  late TextEditingController tsvController;
+  String? tsvErrorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    engController = TextEditingController(text: widget.word?['englishWord'] ?? '');
+    posController = TextEditingController(text: widget.word?['koreanPartOfSpeech'] ?? '');
+    korController = TextEditingController(text: widget.word?['koreanMeaning'] ?? '');
+    sentenceController = TextEditingController(text: widget.word?['sentence'] ?? '');
+    sentenceKorController = TextEditingController(text: widget.word?['sentenceKor'] ?? '');
+    tsvController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    engController.dispose();
+    posController.dispose();
+    korController.dispose();
+    sentenceController.dispose();
+    sentenceKorController.dispose();
+    tsvController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.word == null ? '단어 추가' : '단어 수정'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: '직접 입력'),
+                Tab(text: 'TSV 붙여넣기'),
+              ],
+            ),
+            SizedBox(
+              height: 320,
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(controller: engController, decoration: const InputDecoration(labelText: '영어 단어')),
+                        TextField(controller: posController, decoration: const InputDecoration(labelText: '품사')),
+                        TextField(controller: korController, decoration: const InputDecoration(labelText: '한글 뜻')),
+                        TextField(controller: sentenceController, decoration: const InputDecoration(labelText: '예문')),
+                        TextField(controller: sentenceKorController, decoration: const InputDecoration(labelText: '예문 해석')),
+                      ],
+                    ),
+                  ),
+                  SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('아래에 TSV 형식(영어\t품사\t뜻\t예문\t예문해석)으로 붙여넣으세요.'),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: tsvController,
+                          minLines: 6,
+                          maxLines: 16,
+                          decoration: InputDecoration(
+                            border: const OutlineInputBorder(),
+                            hintText: 'apple\tn.\t사과\tThis is an apple.\t이것은 사과입니다.',
+                            errorText: tsvErrorText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(ctx),
+          onPressed: () => Navigator.pop(context),
           child: const Text('취소'),
         ),
         ElevatedButton(
           onPressed: () {
-            final eng = engController.text.trim();
-            final pos = posController.text.trim();
-            final kor = korController.text.trim();
-            final sentence = sentenceController.text.trim();
-            final sentenceKor = sentenceKorController.text.trim();
-            if (eng.isEmpty || pos.isEmpty || kor.isEmpty) {
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(content: Text('모든 필드를 입력해주세요.')),
-              );
-              return;
+            if (_tabController.index == 0) {
+              final eng = engController.text.trim();
+              final pos = posController.text.trim();
+              final kor = korController.text.trim();
+              final sentence = sentenceController.text.trim();
+              final sentenceKor = sentenceKorController.text.trim();
+              if (eng.isEmpty || pos.isEmpty || kor.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('모든 필드를 입력해주세요.')),
+                );
+                return;
+              }
+              Navigator.pop(context, {
+                'englishWord': eng,
+                'koreanPartOfSpeech': pos,
+                'koreanMeaning': kor,
+                'sentence': sentence,
+                'sentenceKor': sentenceKor,
+              });
+            } else {
+              final lines = tsvController.text.trim().split('\n');
+              final List<Map<String, String>> words = [];
+              for (var i = 0; i < lines.length; i++) {
+                final line = lines[i].trim();
+                if (line.isEmpty) continue;
+                final parts = line.split('\t');
+                if (parts.length < 3) {
+                  setState(() => tsvErrorText = '${i + 1}번째 줄: 최소 3개(영어, 품사, 뜻) 필드 필요');
+                  return;
+                }
+                words.add({
+                  'englishWord': parts[0],
+                  'koreanPartOfSpeech': parts[1],
+                  'koreanMeaning': parts[2],
+                  'sentence': parts.length > 3 ? parts[3] : '',
+                  'sentenceKor': parts.length > 4 ? parts[4] : '',
+                });
+              }
+              if (words.isEmpty) {
+                setState(() => tsvErrorText = '추가할 단어가 없습니다.');
+                return;
+              }
+              Navigator.pop(context, words);
             }
-            Navigator.pop(ctx, {
-              'englishWord': eng,
-              'koreanPartOfSpeech': pos,
-              'koreanMeaning': kor,
-              'sentence': sentence,
-              'sentenceKor': sentenceKor,
-            });
           },
-          child: Text(word == null ? '추가' : '수정'),
+          child: Text(widget.word == null ? '추가' : '수정'),
         ),
       ],
-    ),
+    );
+  }
+}
+
+/// 단어 입력 다이얼로그: 입력값만 반환, Firestore 작업은 State에서 처리
+Future<dynamic> showEditWordInputDialog(BuildContext context, {Map<String, dynamic>? word}) {
+  return showDialog(
+    context: context,
+    builder: (ctx) => AddWordDialog(word: word),
   );
 }
 
