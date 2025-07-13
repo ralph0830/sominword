@@ -125,7 +125,21 @@ class _WordAdminPageState extends State<WordAdminPage> {
     int movedCount = 0;
     int duplicateCount = 0;
     int failCount = 0;
+    final progressNotifier = ValueNotifier<int>(0);
+    bool cancelled = false;
+    // 진행 현황 다이얼로그 표시
+    Future progressDialog = _showWordTransferProgressDialog(
+      context,
+      action: '이동',
+      totalCount: _selectedWordIds.length,
+      progressNotifier: progressNotifier,
+      onCancel: () {
+        cancelled = true;
+        Navigator.of(context, rootNavigator: true).pop();
+      },
+    );
     for (final wordId in _selectedWordIds) {
+      if (cancelled) break;
       try {
         final doc = await FirebaseFirestore.instance
             .collection('devices')
@@ -157,8 +171,12 @@ class _WordAdminPageState extends State<WordAdminPage> {
       } catch (e) {
         failCount++;
       }
+      progressNotifier.value++;
     }
     _clearSelection();
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // 진행 다이얼로그 닫기
+    await progressDialog;
     if (!mounted) return;
     await _showWordTransferResultDialog(context,
       action: '이동',
@@ -229,7 +247,21 @@ class _WordAdminPageState extends State<WordAdminPage> {
     int copiedCount = 0;
     int duplicateCount = 0;
     int failCount = 0;
+    final progressNotifier = ValueNotifier<int>(0);
+    bool cancelled = false;
+    // 진행 현황 다이얼로그 표시
+    Future progressDialog = _showWordTransferProgressDialog(
+      context,
+      action: '복사',
+      totalCount: _selectedWordIds.length,
+      progressNotifier: progressNotifier,
+      onCancel: () {
+        cancelled = true;
+        Navigator.of(context, rootNavigator: true).pop();
+      },
+    );
     for (final wordId in _selectedWordIds) {
+      if (cancelled) break;
       try {
         final doc = await FirebaseFirestore.instance
             .collection('devices')
@@ -260,7 +292,11 @@ class _WordAdminPageState extends State<WordAdminPage> {
       } catch (e) {
         failCount++;
       }
+      progressNotifier.value++;
     }
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // 진행 다이얼로그 닫기
+    await progressDialog;
     if (!mounted) return;
     await _showWordTransferResultDialog(context,
       action: '복사',
@@ -300,6 +336,42 @@ class _WordAdminPageState extends State<WordAdminPage> {
             child: const Text('확인'),
           ),
         ],
+      ),
+    );
+  }
+
+  // 이동/복사 진행 현황 다이얼로그
+  Future<void> _showWordTransferProgressDialog(BuildContext context, {
+    required String action,
+    required int totalCount,
+    required ValueNotifier<int> progressNotifier,
+    required VoidCallback onCancel,
+  }) async {
+    await showDialog(
+      barrierDismissible: false,
+      context: context,
+      builder: (ctx) => ValueListenableBuilder<int>(
+        valueListenable: progressNotifier,
+        builder: (ctx, progress, _) {
+          final percent = totalCount == 0 ? 0.0 : progress / totalCount;
+          return AlertDialog(
+            title: Text('단어 $action 진행 중'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('$progress / $totalCount'),
+                const SizedBox(height: 16),
+                LinearProgressIndicator(value: percent),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: onCancel,
+                child: const Text('취소'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
