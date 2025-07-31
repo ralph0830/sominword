@@ -68,15 +68,27 @@ class FirebaseService {
     required String englishWord,
     required String koreanPartOfSpeech,
     required String koreanMeaning,
+    String? sentence,
+    String? sentenceKor,
   }) async {
     final wordsPath = await _deviceWordsPath;
     
-    await _firestore.collection(wordsPath).add({
+    final wordData = <String, dynamic>{
       'englishWord': englishWord,
       'koreanPartOfSpeech': koreanPartOfSpeech,
       'koreanMeaning': koreanMeaning,
       'inputTimestamp': FieldValue.serverTimestamp(),
-    });
+    };
+    
+    // 예문 필드가 있는 경우에만 추가
+    if (sentence != null && sentence.isNotEmpty) {
+      wordData['sentence'] = sentence;
+    }
+    if (sentenceKor != null && sentenceKor.isNotEmpty) {
+      wordData['sentenceKor'] = sentenceKor;
+    }
+    
+    await _firestore.collection(wordsPath).add(wordData);
   }
 
   /// 단어를 수정합니다.
@@ -85,15 +97,27 @@ class FirebaseService {
     required String englishWord,
     required String koreanPartOfSpeech,
     required String koreanMeaning,
+    String? sentence,
+    String? sentenceKor,
   }) async {
     final wordsPath = await _deviceWordsPath;
     
-    await _firestore.collection(wordsPath).doc(wordId).update({
+    final updateData = <String, dynamic>{
       'englishWord': englishWord,
       'koreanPartOfSpeech': koreanPartOfSpeech,
       'koreanMeaning': koreanMeaning,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
+    
+    // 예문 필드가 있는 경우에만 추가
+    if (sentence != null && sentence.isNotEmpty) {
+      updateData['sentence'] = sentence;
+    }
+    if (sentenceKor != null && sentenceKor.isNotEmpty) {
+      updateData['sentenceKor'] = sentenceKor;
+    }
+    
+    await _firestore.collection(wordsPath).doc(wordId).update(updateData);
   }
 
   /// 단어를 삭제합니다.
@@ -322,6 +346,8 @@ class FirebaseService {
         'partOfSpeech': data['koreanPartOfSpeech'] ?? data['korean_part_of_speech'] ?? '',
         'meaning': data['koreanMeaning'] ?? data['korean_meaning'] ?? '',
         'input_timestamp': data['inputTimestamp'] ?? data['input_timestamp'],
+        'sentence': data['sentence'] ?? data['example'] ?? '',
+        'sentenceKor': data['sentenceKor'] ?? data['exampleKor'] ?? '',
       };
     }).toList();
   }

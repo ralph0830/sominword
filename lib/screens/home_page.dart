@@ -350,6 +350,32 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _speakSentence(String sentence) async {
+    if (isSpeaking || !mounted) return;
+    setState(() { isSpeaking = true; });
+    try {
+      await flutterTts.stop();
+      await flutterTts.speak(sentence);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('예문 재생 중 오류가 발생했습니다.'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() { isSpeaking = false; });
+      }
+    }
+  }
+
   bool isFavoriteWord(String word) {
     return favoritesBox.get(word, defaultValue: false) as bool;
   }
@@ -1059,6 +1085,8 @@ class _HomePageState extends State<HomePage> {
                                     final word = list[idx]['word'] as String? ?? '';
                                     final partOfSpeech = list[idx]['partOfSpeech'] as String? ?? '';
                                     final meaning = list[idx]['meaning'] as String? ?? '';
+                                    final sentence = list[idx]['sentence'] as String? ?? '';
+                                    final sentenceKor = list[idx]['sentenceKor'] as String? ?? '';
                                     return WordCard(
                                       word: word,
                                       partOfSpeech: partOfSpeech,
@@ -1075,6 +1103,9 @@ class _HomePageState extends State<HomePage> {
                                       onRevealWord: () => revealWord(idx),
                                       onRevealMeaning: () => revealMeaning(idx),
                                       showHint: showHint && idx == currentIndex,
+                                      sentence: sentence,
+                                      sentenceKor: sentenceKor,
+                                      onSpeakSentence: sentence.isNotEmpty ? () => _speakSentence(sentence) : null,
                                       loopButton: IconButton(
                                         icon: Icon(infiniteLoop ? Icons.lock : Icons.lock_open),
                                         tooltip: infiniteLoop ? '무한반복 ON' : '무한반복 OFF',
